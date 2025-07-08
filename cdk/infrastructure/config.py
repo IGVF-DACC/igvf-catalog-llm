@@ -75,9 +75,9 @@ config: Dict[str, Any] = {
                 'max_capacity': 4,
             },
             'backend_url': 'https://db.catalog.igvf.org/',
-            'use_subdomain': False,
             'tags': [
             ],
+            'url_prefix': 'catalog-llm',
         },
     }
 }
