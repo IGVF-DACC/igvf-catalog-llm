@@ -4,7 +4,7 @@ ENV PYTHONBUFFERED 1
 
 RUN apt-get update && apt-get install -y curl git
 
-RUN python -m pip install pip==24.0
+RUN python -m pip install pip
 
 WORKDIR /docker
 COPY ./docker/flask/entrypoint.sh .
