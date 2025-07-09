@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  flask:
+    build:
+      context: .
+      dockerfile: ./docker/flask/Dockerfile
+    volumes:
+      - ".:/igvf-catalog-llm"
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=1 # Optional: enable debug mode
+      - CATALOG_USERNAME
+      - CATALOG_PASSWORD
+      - OPENAI_API_KEY
+    ports:
+      - "5000:5000"
