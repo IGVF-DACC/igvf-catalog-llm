@@ -16,7 +16,7 @@ from prompt_template import AQL_GENERATION_PROMPT
 # Initialize Flask app
 app = Flask(__name__)
 
-DATABASE_URL = 'https://db-dev.catalog.igvf.org'
+DATABASE_URL = 'https://db.catalog.igvf.org'
 DB_NAME = 'igvf'
 OPENAI_MODEL = 'gpt-4o'
 
