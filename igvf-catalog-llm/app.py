@@ -1,3 +1,4 @@
+import datetime
 import os
 from flask import Flask, request, jsonify
 from arango import ArangoClient
@@ -16,7 +17,7 @@ from prompt_template import AQL_GENERATION_PROMPT
 # Initialize Flask app
 app = Flask(__name__)
 
-DATABASE_URL = 'https://db-dev.catalog.igvf.org'
+DATABASE_URL = 'https://db.catalog.igvf.org'
 DB_NAME = 'igvf'
 OPENAI_MODEL = 'gpt-4o'
 
@@ -26,13 +27,19 @@ limiter.init_app(app)
 
 def initialize_arango_graph():
     # Connect to ArangoDB and initialize graph
+    print('initializing arango graph')
 
     username =  os.environ['CATALOG_USERNAME']
     password = os.environ['CATALOG_PASSWORD']
     client = ArangoClient(hosts=DATABASE_URL)
     try:
+        # check how long it takes to get the graph
         db = client.db(DB_NAME, username=username, password=password)
-        return ArangoGraph(db), True, None  # Return graph, connection status (True), and no error
+        start_time = datetime.datetime.now()
+        graph = ArangoGraph(db)
+        end_time = datetime.datetime.now()
+        print('time taken to get the graph', end_time - start_time)
+        return graph, True, None  # Return graph, connection status (True), and no error
     except Exception as e:
         return None, False, str(e)  # Return None graph, connection status (False), and the error
 
