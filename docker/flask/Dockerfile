@@ -22,6 +22,7 @@ WORKDIR /igvf-catalog-llm/igvf-catalog-llm
 
 EXPOSE 5000
 
+ENV BACKEND_URL=https://db-dev.catalog.igvf.org
 
 ENTRYPOINT ["/docker/entrypoint.sh"]
 
