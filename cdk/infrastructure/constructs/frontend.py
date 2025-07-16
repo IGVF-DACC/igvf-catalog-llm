@@ -128,7 +128,7 @@ class Frontend(Construct):
 
     def _add_application_container_to_task(self) -> None:
         container_name = 'flask'
-        # 获取 AWS Secrets Manager 的 secret
+        # Get AWS Secrets Manager secret
         catalog_llm_secret = SMSecret.from_secret_name_v2(
             self,
             'CatalogLLMSecret',

@@ -16,9 +16,9 @@ from prompt_template import AQL_GENERATION_PROMPT
 # Initialize Flask app
 app = Flask(__name__)
 
-DATABASE_URL = 'https://db.catalog.igvf.org'
+BACKEND_URL = os.environ.get('BACKEND_URL', 'https://db-dev.catalog.igvf.org/')
 DB_NAME = 'igvf'
-OPENAI_MODEL = 'gpt-4o'
+OPENAI_MODEL = 'gpt-4.1'
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -29,7 +29,7 @@ def initialize_arango_graph():
 
     username =  os.environ['CATALOG_USERNAME']
     password = os.environ['CATALOG_PASSWORD']
-    client = ArangoClient(hosts=DATABASE_URL)
+    client = ArangoClient(hosts=BACKEND_URL)
     try:
         db = client.db(DB_NAME, username=username, password=password)
         return ArangoGraph(db), True, None  # Return graph, connection status (True), and no error
@@ -87,7 +87,6 @@ def ask_llm(question):
         response = chain.invoke(input_data)
         print(cb)
     return response
-
 
 graph, arango_healthy, arango_error = initialize_arango_graph()
 if graph:
@@ -152,7 +151,12 @@ def query():
 @app.route('/health', methods=['GET'])
 def healthcheck():
     if arango_healthy and model is not None:
-        return jsonify({'status': 'OK', 'arangodb': 'OK', 'llm': 'OK'}), 200
+        return jsonify({
+            'status': 'OK',
+            'arangodb': 'OK',
+            'llm': 'OK',
+            'backend_url': BACKEND_URL
+        }), 200
     else:
         status = {'status': 'ERROR'}
         if not arango_healthy:

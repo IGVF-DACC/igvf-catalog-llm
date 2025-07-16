@@ -22,7 +22,6 @@ WORKDIR /igvf-catalog-llm/igvf-catalog-llm
 
 EXPOSE 5000
 
-
 ENTRYPOINT ["/docker/entrypoint.sh"]
 
 CMD ["flask", "run", "--host=0.0.0.0"]
