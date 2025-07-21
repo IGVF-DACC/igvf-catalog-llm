@@ -40,5 +40,9 @@
   "hosted-zone:account=109189702753:domainName=demo.igvf.org:region=us-west-2": {
     "Id": "/hostedzone/Z03254935D5QAQ90L5FK",
     "Name": "demo.igvf.org."
+  },
+  "hosted-zone:account=109189702753:domainName=catalog.igvf.org:region=us-west-2": {
+    "Id": "/hostedzone/Z03230012OCDGFJD3999B",
+    "Name": "catalog.igvf.org."
   }
 }

@@ -12,7 +12,9 @@ from aws_cdk.pipelines import CodePipelineSource
 from aws_cdk.pipelines import DockerCredential
 from aws_cdk.pipelines import ManualApprovalStep
 from aws_cdk.pipelines import ShellStep
+from aws_cdk.pipelines import CodeBuildStep
 from aws_cdk.pipelines import Wave
+from aws_cdk.aws_iam import PolicyStatement
 
 from infrastructure.config import Config
 from infrastructure.config import PipelineConfig
@@ -73,7 +75,7 @@ class BasicSelfUpdatingPipeline(Construct):
         )
 
     def _define_cdk_synth_step(self) -> None:
-        self.synth = ShellStep(
+        self.synth = CodeBuildStep(
             'SynthStep',
             input=self.github,
             env={
@@ -90,6 +92,12 @@ class BasicSelfUpdatingPipeline(Construct):
                 'cdk synth -v -c branch=$BRANCH -c config-name=$CONFIG_NAME',
             ],
             primary_output_directory='cdk/cdk.out',
+            role_policy_statements=[
+                PolicyStatement(
+                    actions=["route53:ListHostedZonesByName"],
+                    resources=["*"]
+                )
+            ]
         )
 
     def _define_artifact_bucket(self) -> None:
