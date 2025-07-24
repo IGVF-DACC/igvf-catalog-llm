@@ -126,7 +126,7 @@ class BasicSelfUpdatingPipeline(Construct):
             ],
             docker_enabled_for_synth=True,
             code_pipeline=self.underlying_pipeline,
-            cli_version='2.88.0',
+            cli_version='2.1022.0',
         )
 
     def _get_underlying_pipeline(self) -> Pipeline:
