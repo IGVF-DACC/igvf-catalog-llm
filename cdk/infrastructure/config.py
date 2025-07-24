@@ -88,7 +88,7 @@ class Common:
     organization_name: str = 'igvf-dacc'
     project_name: str = 'igvf-catalog-llm'
     default_region: str = 'us-west-2'
-    aws_cdk_version: str = '2.88.0'
+    aws_cdk_version: str = '2.1022.0'
 
 
 @dataclass
