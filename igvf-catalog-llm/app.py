@@ -24,17 +24,20 @@ OPENAI_MODEL = 'gpt-4.1'
 limiter = Limiter(key_func=get_remote_address)
 limiter.init_app(app)
 
+
 def initialize_arango_graph():
     # Connect to ArangoDB and initialize graph
 
-    username =  os.environ['CATALOG_USERNAME']
+    username = os.environ['CATALOG_USERNAME']
     password = os.environ['CATALOG_PASSWORD']
     client = ArangoClient(hosts=BACKEND_URL)
     try:
         db = client.db(DB_NAME, username=username, password=password)
-        return ArangoGraph(db), True, None  # Return graph, connection status (True), and no error
+        # Return graph, connection status (True), and no error
+        return ArangoGraph(db), True, None
     except Exception as e:
-        return None, False, str(e)  # Return None graph, connection status (False), and the error
+        # Return None graph, connection status (False), and the error
+        return None, False, str(e)
 
 
 def initialize_collection_names(collection_schema):
@@ -88,6 +91,7 @@ def ask_llm(question):
         print(cb)
     return response
 
+
 graph, arango_healthy, arango_error = initialize_arango_graph()
 if graph:
     collection_schema = graph.schema['Collection Schema']
@@ -97,7 +101,7 @@ else:
     collection_schema = None
     collection_names = []
     model = None
-    print(f"Error initializing ArangoDB graph: {arango_error}")
+    print(f'Error initializing ArangoDB graph: {arango_error}')
 
 
 def get_updated_graph(graph, collection_schema, selected_collection_names):
@@ -121,7 +125,7 @@ def build_response(block):
 
 
 @app.route('/query', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit('10 per minute')
 def query():
     data = request.get_json()
     if not data or 'password' not in data or 'query' not in data:

@@ -138,7 +138,8 @@ class Frontend(Construct):
             'ApplicationContainer',
             container_name=container_name,
             image=self.application_image,
-            port_mappings=[ecs.PortMapping(container_port=5000, host_port=5000)],
+            port_mappings=[ecs.PortMapping(
+                container_port=5000, host_port=5000)],
             environment={
                 'NODE_ENV': 'production',
                 'BACKEND_URL': self.props.config.backend_url,

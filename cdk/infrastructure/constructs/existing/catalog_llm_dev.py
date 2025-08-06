@@ -9,7 +9,6 @@ from shared_infrastructure.igvf_dev.notification import Notification
 from shared_infrastructure.igvf_dev.bus import Bus
 
 
-
 from typing import Any
 
 
@@ -52,4 +51,3 @@ class Network(Construct):
             'Vpc',
             vpc_id='vpc-0a5f4ff3233b1b79b'
         )
-

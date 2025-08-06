@@ -20,7 +20,7 @@ EXCLUDE_RESOURCE_TYPES = [
 ]
 
 
-def add_environment_tag(stack: Stack, config: ConfigWithTags) -> None: # type: ignore
+def add_environment_tag(stack: Stack, config: ConfigWithTags) -> None:  # type: ignore
     Tags.of(stack).add(
         'environment',
         config.name,
@@ -28,7 +28,7 @@ def add_environment_tag(stack: Stack, config: ConfigWithTags) -> None: # type: i
     )
 
 
-def add_project_tag(stack: Stack, config: ConfigWithTags) -> None: # type: ignore
+def add_project_tag(stack: Stack, config: ConfigWithTags) -> None:  # type: ignore
     Tags.of(stack).add(
         'project',
         config.common.project_name,
@@ -36,7 +36,7 @@ def add_project_tag(stack: Stack, config: ConfigWithTags) -> None: # type: ignor
     )
 
 
-def add_branch_tag(stack: Stack, config: ConfigWithTags) -> None: # type: ignore
+def add_branch_tag(stack: Stack, config: ConfigWithTags) -> None:  # type: ignore
     Tags.of(stack).add(
         'branch',
         config.branch,
@@ -44,7 +44,7 @@ def add_branch_tag(stack: Stack, config: ConfigWithTags) -> None: # type: ignore
     )
 
 
-def add_config_tags(stack: Stack, config: ConfigWithTags) -> None: # type: ignore
+def add_config_tags(stack: Stack, config: ConfigWithTags) -> None:  # type: ignore
     for (key, value) in config.tags:
         Tags.of(stack).add(
             key,
@@ -53,7 +53,7 @@ def add_config_tags(stack: Stack, config: ConfigWithTags) -> None: # type: ignor
         )
 
 
-def add_tags_to_stack(stack: Stack, config: ConfigWithTags) -> None: # type: ignore
+def add_tags_to_stack(stack: Stack, config: ConfigWithTags) -> None:  # type: ignore
     add_environment_tag(stack, config)
     add_project_tag(stack, config)
     add_branch_tag(stack, config)

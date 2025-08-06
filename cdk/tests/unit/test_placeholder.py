@@ -1,2 +1,2 @@
 def test_placeholder():
-      assert True
+    assert True
