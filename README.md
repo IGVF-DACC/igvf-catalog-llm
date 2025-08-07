@@ -1,5 +1,7 @@
 # IGVF Catalog LLM
 
+[![Coverage Status](https://coveralls.io/repos/github/IGVF-DACC/igvf-catalog-llm/badge.svg?branch=dev)](https://coveralls.io/github/IGVF-DACC/igvf-catalog-llm?branch=dev)
+
 ## Overview
 
 IGVF Catalog LLM is a Flask-based web application that leverages OpenAI's GPT models and LangChain to translate natural language questions into ArangoDB AQL queries, enabling advanced querying of the IGVF Catalog knowledge graph. The project also includes AWS CDK infrastructure-as-code for cloud deployment.
@@ -14,7 +16,7 @@ IGVF Catalog LLM is a Flask-based web application that leverages OpenAI's GPT mo
 
 ## Directory Structure
 
-```
+```text
 .
 ├── igvf-catalog-llm/         # Flask app and core logic
 │   ├── app.py                # Main Flask application
