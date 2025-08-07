@@ -1,0 +1,3 @@
+[run]
+omit =
+    igvf-catalog-llm/tests/*
