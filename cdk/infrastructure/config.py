@@ -77,7 +77,7 @@ config: Dict[str, Any] = {
             'backend_url': 'https://db.catalog.igvf.org/',
             'tags': [
             ],
-            'url_prefix': 'catalog-llm',
+            'url_prefix': 'llm',
         },
     }
 }
