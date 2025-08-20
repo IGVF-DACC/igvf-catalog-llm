@@ -93,7 +93,7 @@ class Notification(Construct):
         self.alarm_notification_topic = Topic.from_topic_arn(
             self,
             'AlarmNotificationTopic',
-            topic_arn='arn:aws:sns:us-west-2:636503752262:IGVFProdCatalogSlack:311f4971-f961-4948-ba9f-4bd4521763ce'
+            topic_arn='arn:aws:sns:us-west-2:636503752262:IGVFProdCatalogSlack'
         )
 
 
