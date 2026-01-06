@@ -139,7 +139,7 @@ def test_select_collections_verify_api_call(mock_openai):
 
     # Verify the API call parameters
     call_args = mock_openai.chat.completions.create.call_args
-    assert call_args[1]['model'] == 'gpt-4o'
+    assert call_args[1]['model'] == 'gpt-4.1'
     assert call_args[1]['temperature'] == 0
     assert call_args[1]['response_format'] == {'type': 'json_object'}
     assert len(call_args[1]['messages']) == 1
