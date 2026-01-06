@@ -1,13 +1,17 @@
+from constants import DEFAULT_LIMIT
+
 AQL_EXAMPLES = """
     # Tell me about gene SAMD11
     FOR gene IN genes
     FILTER gene.name == "SAMD11"
+    LIMIT 0, {DEFAULT_LIMIT}
     RETURN gene
 
     # show me all the vairants that is in chromosome 1, position at 10000000?
     WITH variants
     FOR v IN variants
     FILTER v.chr == "chr1" AND v.pos == 10000000
+    LIMIT 0, {DEFAULT_LIMIT}
     RETURN v
 
     # Can you tell me the variant with SPDI of NC_000012.12:102855312:C:T is associated with what diseases?
@@ -15,6 +19,7 @@ AQL_EXAMPLES = """
     FOR variant IN variants
     FILTER variant.spdi == 'NC_000012.12:102855312:C:T'
     FOR disease IN OUTBOUND variant variants_diseases
+    LIMIT 0, {DEFAULT_LIMIT}
     RETURN disease
 
     # Show me all variants associated with cardiomyopathy
@@ -27,6 +32,7 @@ AQL_EXAMPLES = """
         RETURN o._id
         )
     RETURN d._from)
+    LIMIT 0, {DEFAULT_LIMIT}
     RETURN v
 
     # What are the transcripts from the protein PARI_HUMAN?
@@ -34,6 +40,7 @@ AQL_EXAMPLES = """
         FILTER 'PARI_HUMAN' in p.names
         FOR t IN transcripts_proteins
             FILTER t._to == p._id
+            LIMIT 0, {DEFAULT_LIMIT}
             RETURN DOCUMENT(t._from)
 
     # what genomic elements overlap rs1047055?
@@ -44,6 +51,7 @@ AQL_EXAMPLES = """
     )
     FOR g IN genomic_elements OPTIONS { indexHint: "idx_zkd_start_end", forceIndexHint: true }
         FILTER g.chr == variant.chr AND g.start <= variant.pos AND g.end > variant.pos
+        LIMIT 0, {DEFAULT_LIMIT}
         RETURN DISTINCT g
 
     # For eQTL data, what variants are active in tissue that is part of heart.
@@ -59,7 +67,7 @@ AQL_EXAMPLES = """
             FILTER vgt._to == tgt._id
             FOR vg IN variants_genes
                 FILTER vg._id == vgt._from AND vg.label == "eQTL"
-                limit 5
+                LIMIT 0, {DEFAULT_LIMIT}
                 RETURN DISTINCT { term: tgt, variant: vg._from, gene: DOCUMENT(vg._to)}
 
     # Find the genomic elements that are linked to PP1F (ENSG0000ENSG00000187642), with score >0.85
@@ -68,9 +76,10 @@ AQL_EXAMPLES = """
         FILTER gene._to == "genes/ENSG00000187642" AND gene.score > 0.85
         FOR element IN genomic_elements
             FILTER element._id == gene._from
+            LIMIT 0, {DEFAULT_LIMIT}
             RETURN element
 
-    # Find the top 5 eQTLs in ontology term named amygdala, sorted by p_value.
+    # Find the top eQTLs in ontology term named amygdala, sorted by p_value.
     LET heartTerms = (
     FOR t IN ontology_terms
         FILTER t.name == "amygdala"
@@ -81,7 +90,7 @@ AQL_EXAMPLES = """
     FOR vg in variants_genes
         FILTER vgt._from == vg._id AND vg.label == "eQTL"
         SORT vg.`p_value` ASC
-        LIMIT 5
+        LIMIT 0, {DEFAULT_LIMIT}
         LET gene = DOCUMENT(vg._to)
         LET variant = DOCUMENT(vg._from)
     RETURN {'p-val': vg.`p_value`,
@@ -97,13 +106,14 @@ AQL_EXAMPLES = """
     )
     FOR g IN genomic_elements OPTIONS { indexHint: "idx_zkd_start_end", forceIndexHint: true }
         FILTER g.chr == variant.chr AND g.start <= variant.pos AND g.end > variant.pos
+        LIMIT 0, {DEFAULT_LIMIT}
         RETURN g
 
-    # Find the top 5 genes that are co-expressed with gene ENSG00000261221, sorted by z_score.
+    # Find the top genes that are co-expressed with gene ENSG00000261221, sorted by z_score.
     FOR gg in genes_genes
         FILTER gg._from == 'genes/ENSG00000261221'
         SORT gg.`z_score` ASC
-        limit 5
+        LIMIT 0, {DEFAULT_LIMIT}
         RETURN gg
 
     # Find genes that are linked to variant with SPDI NC_000005.10:173860847:G:A.
@@ -116,6 +126,7 @@ AQL_EXAMPLES = """
         FILTER vg._from == variant._id
         FOR gene IN genes
             FILTER gene._id == vg._to
+            LIMIT 0, {DEFAULT_LIMIT}
             RETURN distinct gene
 
     # Is variant with rsID rs875741 a caQTL?
@@ -123,12 +134,13 @@ AQL_EXAMPLES = """
         FILTER "rs875741" in v.rsid
     FOR vg IN variants_genomic_elements
         FILTER vg._from == v._id
+        LIMIT 0, {DEFAULT_LIMIT}
         return vg
 
-    # find 5 variants linked to gene ENSG00000188290.
+    # find variants linked to gene ENSG00000188290.
     FOR vg IN variants_genes
         FILTER vg._to == 'genes/ENSG00000188290'
-        LIMIT 5
+        LIMIT 0, {DEFAULT_LIMIT}
         FOR v IN variants
             FILTER v._id == vg._from
             RETURN v
@@ -140,5 +152,6 @@ AQL_EXAMPLES = """
         FILTER edge._to == gene._id
         FOR disease IN ontology_terms
         FILTER disease._id == edge._from
+        LIMIT 0, {DEFAULT_LIMIT}
         RETURN disease
     """

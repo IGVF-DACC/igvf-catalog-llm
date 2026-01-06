@@ -1,5 +1,6 @@
 import openai
 import ast
+from constants import OPENAI_MODEL
 
 
 def create_prompt(input_text, categories):
@@ -40,7 +41,7 @@ def select_collections(query, collection_names):
     content = create_prompt(query, collection_names)
     response = openai.chat.completions.create(
         response_format=RESPONSE_FORMAT,
-        model='gpt-4o',
+        model=OPENAI_MODEL,
         temperature=0,
         messages=[
             {'role': 'user', 'content': content},
