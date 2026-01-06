@@ -34,7 +34,7 @@ SPECIFIC RULE FOR IDs:
 
 GENERAL RULE FOR ALL IDENTIFIERS:
 - ALL identifiers: Copy the EXACT case from User Input, character by character
-- DO NOT modify, lowercase, uppercase, or change any identifier's case
+- Most IDs are uppercase and they are case sensitive. DO NOT lowercase any identifier!
 
 🚨 IF YOU LOWERCASE Ensembl IDs, SPDI IDs, OR PROTEIN NAMES, THE QUERY WILL FAIL. PRESERVE EXACT CASE. 🚨
 🚨 SPDI IDs like "NC_000012.12:102855312:C:T" must stay UPPERCASE - never lowercase them! 🚨

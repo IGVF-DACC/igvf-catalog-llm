@@ -4,7 +4,6 @@ from flask import Flask, request, jsonify
 from arango import ArangoClient
 from langchain_arangodb import ArangoGraph, ArangoGraphQAChain
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage
 from aql_examples import AQL_EXAMPLES
 from select_collections import select_collections
 from langchain_community.callbacks import get_openai_callback
@@ -50,10 +49,14 @@ def initialize_llm():
     return model
 
 
-def ask_llm(question, execute_aql_query=False, page=0):
-    selected_collection_names = select_collections(question, collection_names)
-    updated_graph = get_updated_graph(
-        graph, collection_schema, selected_collection_names)
+def ask_llm(question, execute_aql_query=False, page=0, categorization=False):
+    if categorization:
+        selected_collection_names = select_collections(
+            question, collection_names)
+        updated_graph = get_updated_graph(
+            graph, collection_schema, selected_collection_names)
+    else:
+        updated_graph = graph
     # Get prompt template with pagination information for the current page
     aql_prompt = get_aql_generation_prompt(page=page)
 
@@ -84,14 +87,14 @@ def ask_llm(question, execute_aql_query=False, page=0):
 
         # Ensure LIMIT clause is present for pagination (fallback in case LLM doesn't include it)
         if not execute_aql_query:
-            # When execute_aql_query is False, result contains the AQL query string
+            # When execute_aql_query is False, result contains the AQL query string, and aql_result is query explanation instead of AQL results
             aql = response['result']
             aql_with_limit = add_limit_to_aql(aql, page)
             response['result'] = aql_with_limit
             aql_result = db.aql.execute(aql_with_limit)
             # Convert Cursor to list for JSON serialization
             response['aql_result'] = list(aql_result)
-
+    print('callback details:\n', cb)
     return response
 
 

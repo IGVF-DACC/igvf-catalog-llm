@@ -99,11 +99,12 @@ def test_get_updated_graph():
 @patch('app.get_aql_generation_prompt')
 @patch('app.db')
 def test_ask_llm(mock_db, mock_get_prompt, mock_callback, mock_chain_class, mock_get_graph, mock_select_collections):
-    """Test ask_llm function for both execute_aql_query modes."""
+    """Test ask_llm function for both execute_aql_query modes and categorization parameter."""
     # Mock dependencies
     mock_select_collections.return_value = ['genes']
     mock_graph = Mock()
-    mock_get_graph.return_value = mock_graph
+    mock_updated_graph = Mock()
+    mock_get_graph.return_value = mock_updated_graph
     mock_prompt = Mock()
     mock_get_prompt.return_value = mock_prompt
     mock_chain = Mock()
@@ -112,7 +113,7 @@ def test_ask_llm(mock_db, mock_get_prompt, mock_callback, mock_chain_class, mock
     mock_callback.return_value.__enter__.return_value = mock_cb
     mock_callback.return_value.__exit__.return_value = None
 
-    # Test execute_aql_query=False
+    # Test execute_aql_query=False with categorization=False (default behavior)
     mock_chain.invoke.return_value = {
         'result': 'FOR doc IN genes RETURN doc',
         'aql_query': Mock(content='FOR doc IN genes RETURN doc')
@@ -120,17 +121,30 @@ def test_ask_llm(mock_db, mock_get_prompt, mock_callback, mock_chain_class, mock
     mock_db.aql.execute.return_value = []
 
     with patch('app.collection_names', ['genes', 'variants']), \
-            patch('app.graph', Mock()), \
+            patch('app.graph', mock_graph), \
             patch('app.collection_schema', [{'collection_name': 'genes'}]), \
             patch('app.model', Mock()), \
             patch('app.AQL_EXAMPLES', 'test examples'):
 
-        result = ask_llm('test question', execute_aql_query=False)
+        result = ask_llm('test question')
         assert 'result' in result
         assert 'aql_result' in result
         mock_get_prompt.assert_called_with(page=0)
+        # Verify get_updated_graph was NOT called when categorization=False (default)
+        mock_get_graph.assert_not_called()
+        # Verify chain was created with original graph (not updated_graph)
+        call_args = mock_chain_class.from_llm.call_args
+        assert call_args[1]['graph'] == mock_graph
 
-    # Test execute_aql_query=True with page=1
+    # Reset mocks for next test
+    mock_get_graph.reset_mock()
+    mock_chain_class.reset_mock()
+
+    # Reset mocks for next test
+    mock_get_graph.reset_mock()
+    mock_chain_class.reset_mock()
+
+    # Test execute_aql_query=True with categorization=True and page=1
     mock_aql_query = Mock()
     mock_aql_query.content = 'FOR doc IN genes RETURN doc'
     mock_result = Mock()
@@ -142,16 +156,20 @@ def test_ask_llm(mock_db, mock_get_prompt, mock_callback, mock_chain_class, mock
     }
 
     with patch('app.collection_names', ['genes', 'variants']), \
-            patch('app.graph', Mock()), \
+            patch('app.graph', mock_graph), \
             patch('app.collection_schema', [{'collection_name': 'genes'}]), \
             patch('app.model', Mock()), \
             patch('app.AQL_EXAMPLES', 'test examples'):
 
-        result = ask_llm('test question', execute_aql_query=True, page=1)
+        result = ask_llm('test question', execute_aql_query=True,
+                         page=1, categorization=True)
         assert 'aql_query' in result
         assert 'aql_result' in result
         assert result['aql_result'] == [{'gene': 'SAMD11'}]
         mock_get_prompt.assert_called_with(page=1)
+        # Verify get_updated_graph was called when categorization=True
+        mock_get_graph.assert_called_once_with(
+            mock_graph, [{'collection_name': 'genes'}], ['genes'])
 
 
 @pytest.mark.parametrize('arango_healthy,arango_error,model,expected_status,expected_code', [
