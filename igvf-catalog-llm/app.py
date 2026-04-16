@@ -144,6 +144,13 @@ def query():
         response = ask_llm(user_query)
         return jsonify(build_response(response))
     except ValueError as e:
+        if 'Response is Invalid' in str(e):
+            response = {
+                'query': user_query,
+                'error': str(e),
+                'answer': 'Sorry, I can help with this right now.'
+            }
+            return jsonify(build_response(response))
         error = {
             'query': user_query,
             'error': str(e)
