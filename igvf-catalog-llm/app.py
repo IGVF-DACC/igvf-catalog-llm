@@ -148,7 +148,7 @@ def query():
             response = {
                 'query': user_query,
                 'error': str(e),
-                'answer': 'Sorry, I can help with this right now.'
+                'result': 'Sorry, I can help with this right now.'
             }
             return jsonify(build_response(response))
         error = {
