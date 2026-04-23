@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y curl git
 
-RUN python -m pip install pip
+RUN python -m pip install pip==26.0.1
 
 WORKDIR /docker
 COPY ./docker/flask/entrypoint.sh .
@@ -12,7 +12,8 @@ RUN chmod +x ./entrypoint.sh
 
 WORKDIR /requirements
 COPY ./igvf-catalog-llm/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY ./igvf-catalog-llm/build-constraint.txt .
+RUN PIP_BUILD_CONSTRAINT=./build-constraint.txt pip --use-feature=build-constraint install --no-cache-dir -r requirements.txt
 
 WORKDIR /igvf-catalog-llm
 COPY . .
