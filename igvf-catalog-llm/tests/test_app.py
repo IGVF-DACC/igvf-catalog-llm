@@ -283,3 +283,47 @@ def test_query_exception_handling(client):
         assert 'error' in data
         assert 'Test error' in data['error']
         assert data['query'] == 'test query'
+
+
+def test_query_value_error_invalid_response_handling(client):
+    """Test query endpoint special ValueError handling for invalid responses."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.ask_llm') as mock_ask_llm:
+
+        mock_ask_llm.side_effect = ValueError(
+            'Response is Invalid: I cannot help with that request.')
+
+        response = client.post('/query', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['title'] == 'IGVF Catalog LLM Query'
+        assert data['query'] == 'test query'
+        assert data['error'] == 'Response is Invalid: I cannot help with that request.'
+        assert data['result'] == "Sorry, I can't help with this right now."
+
+
+def test_query_value_error_returns_422(client):
+    """Test query endpoint generic ValueError handling."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.ask_llm') as mock_ask_llm:
+
+        mock_ask_llm.side_effect = ValueError('validation failed')
+
+        response = client.post('/query', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 422
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert data['error'] == 'validation failed'
+        assert data['query'] == 'test query'
