@@ -143,6 +143,19 @@ def query():
     try:
         response = ask_llm(user_query)
         return jsonify(build_response(response))
+    except ValueError as e:
+        if 'Response is Invalid' in str(e):
+            response = {
+                'query': user_query,
+                'error': str(e),
+                'result': "Sorry, I can't help with this right now."
+            }
+            return jsonify(build_response(response))
+        error = {
+            'query': user_query,
+            'error': str(e)
+        }
+        return jsonify(error), 422
     except Exception as e:
         error = {
             'query': user_query,
@@ -150,8 +163,9 @@ def query():
         }
         return jsonify(error), 500
 
-
 # Create Flask endpoint for health check
+
+
 @app.route('/health', methods=['GET'])
 def healthcheck():
     if arango_healthy and model is not None:
