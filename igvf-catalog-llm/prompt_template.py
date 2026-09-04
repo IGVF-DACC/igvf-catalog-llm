@@ -1,5 +1,7 @@
 from langchain_core.prompts import PromptTemplate
 
+from constants import QUERY_AQL_LIMIT
+
 AQL_GENERATION_TEMPLATE = """Task: Generate an ArangoDB Query Language (AQL) query from a User Input.
 
 You are an ArangoDB Query Language (AQL) expert responsible for translating a `User Input` into an ArangoDB Query Language (AQL) query.
@@ -14,9 +16,10 @@ Things you should do:
 - Think step by step.
 - Rely on `ArangoDB Schema` and `AQL Query Examples` (if provided) to generate the query.
 - Begin the `AQL Query` by the `WITH` AQL keyword to specify all of the ArangoDB Collections required.
-- Always add 'LIMIT 5' before return for every query, ensuring that no more than 5 results are returned.
+- Always add `LIMIT {offset}, {limit}` before RETURN for every query that returns a list of documents/objects.
+- Use exactly `LIMIT {offset}, {limit}` (offset={offset}, count={limit}).
 - Return the `AQL Query` wrapped in 3 backticks (```).
-- Learn from `AQL Query Examples` queries.
+- Learn from `AQL Query Examples` queries. They already use `LIMIT {offset}, {limit}`.
 - Only answer to requests related to generating an AQL Query.
 - If a request is unrelated to generating AQL Query, say that you cannot help the user.
 
@@ -25,6 +28,12 @@ Things you should not do:
 - Do not include any text except the generated AQL Query.
 - Do not provide explanations or apologies in your responses.
 - Do not generate an AQL Query that removes or deletes any data.
+- Do not use any limit other than `LIMIT {offset}, {limit}`.
+
+⚠️ IMPORTANT EXCEPTIONS - DO NOT use LIMIT for:
+- Count queries (e.g., `RETURN LENGTH(...)`, `RETURN COUNT(...)`)
+- Aggregation queries (e.g., `RETURN SUM(...)`, `RETURN AVG(...)`)
+- Queries that return a single value/result
 
 Under no circumstance should you generate an AQL Query that deletes any data whatsoever.
 
@@ -38,7 +47,14 @@ User Input:
 AQL Query:
 """
 
-AQL_GENERATION_PROMPT = PromptTemplate(
-    input_variables=['aql_examples', 'user_input'],
-    template=AQL_GENERATION_TEMPLATE,
-)
+
+def get_aql_generation_prompt(limit, offset=0):
+    return PromptTemplate(
+        input_variables=['aql_examples', 'user_input'],
+        partial_variables={'limit': str(limit), 'offset': str(offset)},
+        template=AQL_GENERATION_TEMPLATE,
+    )
+
+
+AQL_GENERATION_PROMPT = get_aql_generation_prompt(
+    limit=QUERY_AQL_LIMIT, offset=0)
