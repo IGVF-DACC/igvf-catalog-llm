@@ -32,11 +32,14 @@ from prompt_template import (
 
 # Initialize Flask app
 app = Flask(__name__)
+<<<<<<< HEAD
 app.logger.setLevel(logging.INFO)
 default_handler.setFormatter(logging.Formatter(
     '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
     datefmt='%d/%b/%Y %H:%M:%S',
 ))
+=======
+>>>>>>> ece420f (add endpoint aql)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address, storage_uri='memory://')
@@ -136,6 +139,7 @@ def _prepare_graph_for_question(question):
         graph, collection_schema, selected_collection_names)
 
 
+<<<<<<< HEAD
 def _numeric(value, integer=False):
     try:
         return int(value) if integer else float(value)
@@ -162,6 +166,8 @@ def _log_openai_usage(cb, endpoint):
     }))
 
 
+=======
+>>>>>>> ece420f (add endpoint aql)
 def ask_llm(question):
     updated_graph = _prepare_graph_for_question(question)
     chain = _build_chain(updated_graph)
@@ -185,17 +191,25 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
         aql_examples=aql_examples,
     )
     with get_openai_callback() as cb:
+<<<<<<< HEAD
         generation = chain.aql_generation_chain.invoke(
+=======
+        aql_generation_output = chain.aql_generation_chain.run(
+>>>>>>> ece420f (add endpoint aql)
             {
                 'adb_schema': updated_graph.schema,
                 'aql_examples': aql_examples,
                 'user_input': question,
             }
         )
+<<<<<<< HEAD
         _log_openai_usage(cb, 'graph-query-generator')
     aql_generation_output = (
         generation['text'] if isinstance(generation, dict) else generation
     )
+=======
+        print(cb)
+>>>>>>> ece420f (add endpoint aql)
     aql_query = extract_aql(aql_generation_output)
     if not aql_query:
         return {
@@ -285,9 +299,15 @@ def query():
         return jsonify(error), 500
 
 
+<<<<<<< HEAD
 @app.route('/graph-query-generator', methods=['POST'])
 @limiter.limit('10 per minute')
 def graph_query_generator():
+=======
+@app.route('/aql', methods=['POST'])
+@limiter.limit('10 per minute')
+def aql():
+>>>>>>> ece420f (add endpoint aql)
     data = request.get_json()
     if not data or 'password' not in data or 'query' not in data:
         return jsonify({'error': 'password and query are required'}), 400
