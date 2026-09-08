@@ -248,9 +248,9 @@ def query():
         return jsonify(error), 500
 
 
-@app.route('/aql', methods=['POST'])
+@app.route('/graph-query-generator', methods=['POST'])
 @limiter.limit('10 per minute')
-def aql():
+def graph_query_generator():
     data = request.get_json()
     if not data or 'password' not in data or 'query' not in data:
         return jsonify({'error': 'password and query are required'}), 400

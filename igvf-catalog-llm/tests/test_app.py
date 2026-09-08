@@ -214,7 +214,7 @@ def test_extract_aql_unfenced_query():
     ),
 ])
 def test_apply_aql_limit(aql_query, limit, offset, expected):
-    """Test LIMIT rewrite for /aql generation."""
+    """Test LIMIT rewrite for /graph-query-generator generation."""
     assert apply_aql_limit(aql_query, limit=limit, offset=offset) == expected
 
 
@@ -471,18 +471,18 @@ def test_query_value_error_returns_422(client):
         assert data['query'] == 'test query'
 
 
-def test_aql_missing_data(client):
-    """Test aql endpoint with missing data."""
-    response = client.post('/aql', json={})
+def test_graph_query_generator_missing_data(client):
+    """Test graph-query-generator endpoint with missing data."""
+    response = client.post('/graph-query-generator', json={})
     assert response.status_code == 400
     data = json.loads(response.data)
     assert 'error' in data
     assert 'password and query are required' in data['error']
 
 
-def test_aql_wrong_password(client):
-    """Test aql endpoint with wrong password."""
-    response = client.post('/aql', json={
+def test_graph_query_generator_wrong_password(client):
+    """Test graph-query-generator endpoint with wrong password."""
+    response = client.post('/graph-query-generator', json={
         'password': 'wrong_password',
         'query': 'test query'
     })
@@ -492,8 +492,8 @@ def test_aql_wrong_password(client):
     assert 'wrong password' in data['error']
 
 
-def test_aql_correct_password(client):
-    """Test aql endpoint with correct password."""
+def test_graph_query_generator_correct_password(client):
+    """Test graph-query-generator endpoint with correct password."""
     with patch('app.model', Mock()), \
             patch('app.graph', Mock()), \
             patch('app.collection_schema', Mock()), \
@@ -504,7 +504,7 @@ def test_aql_correct_password(client):
             'aql_query': 'FOR doc IN collection RETURN doc'
         }
 
-        response = client.post('/aql', json={
+        response = client.post('/graph-query-generator', json={
             'password': 'test_password',
             'query': 'test query'
         })
@@ -520,13 +520,13 @@ def test_aql_correct_password(client):
             'test query', limit=100, offset=0)
 
 
-def test_aql_service_unavailable(client):
-    """Test aql endpoint when services are not available."""
+def test_graph_query_generator_service_unavailable(client):
+    """Test graph-query-generator endpoint when services are not available."""
     with patch('app.model', None), \
             patch('app.graph', None), \
             patch('app.collection_schema', None):
 
-        response = client.post('/aql', json={
+        response = client.post('/graph-query-generator', json={
             'password': 'test_password',
             'query': 'test query'
         })
@@ -537,8 +537,8 @@ def test_aql_service_unavailable(client):
         assert 'LLM or ArangoDB graph not initialized properly' in data['error']
 
 
-def test_aql_exception_handling(client):
-    """Test aql endpoint exception handling."""
+def test_graph_query_generator_exception_handling(client):
+    """Test graph-query-generator endpoint exception handling."""
     with patch('app.model', Mock()), \
             patch('app.graph', Mock()), \
             patch('app.collection_schema', Mock()), \
@@ -546,7 +546,7 @@ def test_aql_exception_handling(client):
 
         mock_generate_aql.side_effect = Exception('Test error')
 
-        response = client.post('/aql', json={
+        response = client.post('/graph-query-generator', json={
             'password': 'test_password',
             'query': 'test query'
         })
@@ -558,8 +558,8 @@ def test_aql_exception_handling(client):
         assert data['query'] == 'test query'
 
 
-def test_aql_value_error_invalid_response_handling(client):
-    """Test aql endpoint special ValueError handling for invalid responses."""
+def test_graph_query_generator_value_error_invalid_response_handling(client):
+    """Test graph-query-generator endpoint special ValueError handling for invalid responses."""
     with patch('app.model', Mock()), \
             patch('app.graph', Mock()), \
             patch('app.collection_schema', Mock()), \
@@ -568,7 +568,7 @@ def test_aql_value_error_invalid_response_handling(client):
         mock_generate_aql.side_effect = ValueError(
             'Response is Invalid: I cannot help with that request.')
 
-        response = client.post('/aql', json={
+        response = client.post('/graph-query-generator', json={
             'password': 'test_password',
             'query': 'test query'
         })
@@ -581,8 +581,8 @@ def test_aql_value_error_invalid_response_handling(client):
         assert 'result' not in data
 
 
-def test_aql_value_error_returns_422(client):
-    """Test aql endpoint generic ValueError handling."""
+def test_graph_query_generator_value_error_returns_422(client):
+    """Test graph-query-generator endpoint generic ValueError handling."""
     with patch('app.model', Mock()), \
             patch('app.graph', Mock()), \
             patch('app.collection_schema', Mock()), \
@@ -590,7 +590,7 @@ def test_aql_value_error_returns_422(client):
 
         mock_generate_aql.side_effect = ValueError('validation failed')
 
-        response = client.post('/aql', json={
+        response = client.post('/graph-query-generator', json={
             'password': 'test_password',
             'query': 'test query'
         })
@@ -602,8 +602,8 @@ def test_aql_value_error_returns_422(client):
         assert data['query'] == 'test query'
 
 
-def test_aql_accepts_limit_and_page(client):
-    """Test aql endpoint passes limit and page offset to generate_aql."""
+def test_graph_query_generator_accepts_limit_and_page(client):
+    """Test graph-query-generator endpoint passes limit and page offset to generate_aql."""
     with patch('app.model', Mock()), \
             patch('app.graph', Mock()), \
             patch('app.collection_schema', Mock()), \
@@ -614,7 +614,7 @@ def test_aql_accepts_limit_and_page(client):
             'aql_query': 'FOR doc IN genes LIMIT 50, 50 RETURN doc'
         }
 
-        response = client.post('/aql', json={
+        response = client.post('/graph-query-generator', json={
             'password': 'test_password',
             'query': 'test query',
             'limit': 50,
@@ -632,14 +632,14 @@ def test_aql_accepts_limit_and_page(client):
     ({'page': -1}, 'page must be a non-negative integer'),
     ({'limit': 'abc'}, 'limit and page must be integers'),
 ])
-def test_aql_invalid_pagination(client, payload, expected_error):
-    """Test aql endpoint rejects invalid limit and page values."""
+def test_graph_query_generator_invalid_pagination(client, payload, expected_error):
+    """Test graph-query-generator endpoint rejects invalid limit and page values."""
     body = {
         'password': 'test_password',
         'query': 'test query',
     }
     body.update(payload)
-    response = client.post('/aql', json=body)
+    response = client.post('/graph-query-generator', json=body)
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data['error'] == expected_error

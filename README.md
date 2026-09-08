@@ -76,7 +76,20 @@ Content-Type: application/json
 }
 ```
 
-Returns a JSON response with the AQL query, results, and metadata.
+Generates AQL, runs it against ArangoDB, and asks the LLM to explain the rows.
+
+### Graph Query Generator Endpoint
+
+```bash
+POST /graph-query-generator
+Content-Type: application/json
+{
+  "password": "<CATALOG_PASSWORD>",
+  "query": "Tell me about gene SAMD11"
+}
+```
+
+Returns a JSON response with the generated AQL query. This endpoint does not execute the query or return an LLM explanation.
 
 ## Infrastructure (AWS CDK)
 
