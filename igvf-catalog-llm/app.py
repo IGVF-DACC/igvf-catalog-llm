@@ -33,13 +33,19 @@ from prompt_template import (
 # Initialize Flask app
 app = Flask(__name__)
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 6c2b825 (use logging)
 app.logger.setLevel(logging.INFO)
 default_handler.setFormatter(logging.Formatter(
     '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
     datefmt='%d/%b/%Y %H:%M:%S',
 ))
+<<<<<<< HEAD
 =======
 >>>>>>> ece420f (add endpoint aql)
+=======
+>>>>>>> 6c2b825 (use logging)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address, storage_uri='memory://')
@@ -140,6 +146,9 @@ def _prepare_graph_for_question(question):
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 6c2b825 (use logging)
 def _numeric(value, integer=False):
     try:
         return int(value) if integer else float(value)
@@ -166,8 +175,11 @@ def _log_openai_usage(cb, endpoint):
     }))
 
 
+<<<<<<< HEAD
 =======
 >>>>>>> ece420f (add endpoint aql)
+=======
+>>>>>>> 6c2b825 (use logging)
 def ask_llm(question):
     updated_graph = _prepare_graph_for_question(question)
     chain = _build_chain(updated_graph)
@@ -192,10 +204,14 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
     )
     with get_openai_callback() as cb:
 <<<<<<< HEAD
+<<<<<<< HEAD
         generation = chain.aql_generation_chain.invoke(
 =======
         aql_generation_output = chain.aql_generation_chain.run(
 >>>>>>> ece420f (add endpoint aql)
+=======
+        generation = chain.aql_generation_chain.invoke(
+>>>>>>> 6c2b825 (use logging)
             {
                 'adb_schema': updated_graph.schema,
                 'aql_examples': aql_examples,
@@ -203,13 +219,19 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
             }
         )
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 6c2b825 (use logging)
         _log_openai_usage(cb, 'graph-query-generator')
     aql_generation_output = (
         generation['text'] if isinstance(generation, dict) else generation
     )
+<<<<<<< HEAD
 =======
         print(cb)
 >>>>>>> ece420f (add endpoint aql)
+=======
+>>>>>>> 6c2b825 (use logging)
     aql_query = extract_aql(aql_generation_output)
     if not aql_query:
         return {
