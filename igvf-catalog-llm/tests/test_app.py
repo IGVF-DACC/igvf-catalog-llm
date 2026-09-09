@@ -2,7 +2,7 @@ import pytest
 import os
 import json
 from unittest.mock import Mock, patch, MagicMock
-from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, get_updated_graph, limiter
+from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, _log_openai_usage, get_updated_graph, limiter
 from constants import MAX_AQL_GENERATION_ATTEMPTS, MAX_AQL_LIMIT, QUERY_AQL_LIMIT
 
 
@@ -218,6 +218,26 @@ def test_apply_aql_limit(aql_query, limit, offset, expected):
     assert apply_aql_limit(aql_query, limit=limit, offset=offset) == expected
 
 
+def test_log_openai_usage_writes_json(caplog):
+    """OpenAI callback usage is logged as one JSON object."""
+    cb = Mock(
+        total_tokens=100,
+        prompt_tokens=80,
+        prompt_tokens_cached=0,
+        completion_tokens=20,
+        reasoning_tokens=0,
+        successful_requests=1,
+        total_cost=0.001,
+    )
+    with caplog.at_level('INFO', logger='app'):
+        _log_openai_usage(cb, 'query')
+    payload = json.loads(caplog.records[-1].message)
+    assert payload['event'] == 'openai_usage'
+    assert payload['endpoint'] == 'query'
+    assert payload['total_tokens'] == 100
+    assert payload['total_cost_usd'] == 0.001
+
+
 @patch('app.select_collections')
 @patch('app.get_updated_graph')
 @patch('app.ArangoGraphQAChain')
@@ -237,9 +257,9 @@ def test_generate_aql_does_not_invoke_chain(
 
     mock_chain = Mock()
     mock_chain_class.from_llm.return_value = mock_chain
-    mock_chain.aql_generation_chain.run.return_value = (
-        '```aql\nFOR doc IN genes RETURN doc\n```'
-    )
+    mock_chain.aql_generation_chain.invoke.return_value = {
+        'text': '```aql\nFOR doc IN genes RETURN doc\n```'
+    }
 
     mock_cb = Mock()
     mock_callback.return_value.__enter__.return_value = mock_cb
@@ -256,7 +276,7 @@ def test_generate_aql_does_not_invoke_chain(
         mock_get_examples.assert_called_once_with(limit=100, offset=0)
         mock_chain_class.from_llm.assert_called_once()
         assert mock_chain_class.from_llm.call_args[1]['aql_generation_prompt'] == 'aql only prompt'
-        mock_chain.aql_generation_chain.run.assert_called_once_with({
+        mock_chain.aql_generation_chain.invoke.assert_called_once_with({
             'adb_schema': mock_graph.schema,
             'aql_examples': 'aql only examples',
             'user_input': 'test question',
@@ -290,9 +310,9 @@ def test_generate_aql_invalid_response_does_not_raise(
 
     mock_chain = Mock()
     mock_chain_class.from_llm.return_value = mock_chain
-    mock_chain.aql_generation_chain.run.return_value = (
-        'I cannot help with that request.'
-    )
+    mock_chain.aql_generation_chain.invoke.return_value = {
+        'text': 'I cannot help with that request.'
+    }
     mock_callback.return_value.__enter__.return_value = Mock()
     mock_callback.return_value.__exit__.return_value = None
 

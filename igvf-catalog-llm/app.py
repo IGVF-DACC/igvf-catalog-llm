@@ -1,6 +1,9 @@
+import json
+import logging
 import os
 import re
 from flask import Flask, request, jsonify
+from flask.logging import default_handler
 from arango import ArangoClient
 from langchain_community.graphs import ArangoGraph
 from langchain.chains import ArangoGraphQAChain
@@ -29,9 +32,14 @@ from prompt_template import (
 
 # Initialize Flask app
 app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
+default_handler.setFormatter(logging.Formatter(
+    '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+    datefmt='%d/%b/%Y %H:%M:%S',
+))
 
 # Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri='memory://')
 limiter.init_app(app)
 
 
@@ -128,6 +136,32 @@ def _prepare_graph_for_question(question):
         graph, collection_schema, selected_collection_names)
 
 
+def _numeric(value, integer=False):
+    try:
+        return int(value) if integer else float(value)
+    except (TypeError, ValueError):
+        return 0 if integer else 0.0
+
+
+def _log_openai_usage(cb, endpoint):
+    app.logger.info(json.dumps({
+        'event': 'openai_usage',
+        'endpoint': endpoint,
+        'model': OPENAI_MODEL,
+        'total_tokens': _numeric(getattr(cb, 'total_tokens', 0), integer=True),
+        'prompt_tokens': _numeric(getattr(cb, 'prompt_tokens', 0), integer=True),
+        'prompt_tokens_cached': _numeric(
+            getattr(cb, 'prompt_tokens_cached', 0), integer=True),
+        'completion_tokens': _numeric(
+            getattr(cb, 'completion_tokens', 0), integer=True),
+        'reasoning_tokens': _numeric(
+            getattr(cb, 'reasoning_tokens', 0), integer=True),
+        'successful_requests': _numeric(
+            getattr(cb, 'successful_requests', 0), integer=True),
+        'total_cost_usd': _numeric(getattr(cb, 'total_cost', 0.0)),
+    }))
+
+
 def ask_llm(question):
     updated_graph = _prepare_graph_for_question(question)
     chain = _build_chain(updated_graph)
@@ -137,7 +171,7 @@ def ask_llm(question):
             'query': question,
         }
         response = chain.invoke(input_data)
-        print(cb)
+        _log_openai_usage(cb, 'query')
     return response
 
 
@@ -151,14 +185,17 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
         aql_examples=aql_examples,
     )
     with get_openai_callback() as cb:
-        aql_generation_output = chain.aql_generation_chain.run(
+        generation = chain.aql_generation_chain.invoke(
             {
                 'adb_schema': updated_graph.schema,
                 'aql_examples': aql_examples,
                 'user_input': question,
             }
         )
-        print(cb)
+        _log_openai_usage(cb, 'graph-query-generator')
+    aql_generation_output = (
+        generation['text'] if isinstance(generation, dict) else generation
+    )
     aql_query = extract_aql(aql_generation_output)
     if not aql_query:
         return {
@@ -185,7 +222,7 @@ else:
     collection_schema = None
     collection_names = []
     model = None
-    print(f'Error initializing ArangoDB graph: {arango_error}')
+    app.logger.error('Error initializing ArangoDB graph: %s', arango_error)
 
 
 def get_updated_graph(graph, collection_schema, selected_collection_names):
