@@ -4,6 +4,7 @@ import json
 from unittest.mock import Mock, patch, MagicMock
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, _log_openai_usage, get_updated_graph, limiter
 =======
 from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, get_updated_graph, limiter
@@ -11,6 +12,9 @@ from app import app, initialize_arango_graph, initialize_collection_names, build
 =======
 from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, _log_openai_usage, get_updated_graph, limiter
 >>>>>>> 6c2b825 (use logging)
+=======
+from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, _log_openai_usage, get_updated_graph, execute_aql_query, limiter
+>>>>>>> f2a833b (add ui)
 from constants import MAX_AQL_GENERATION_ATTEMPTS, MAX_AQL_LIMIT, QUERY_AQL_LIMIT
 
 
@@ -867,3 +871,106 @@ def test_graph_query_generator_invalid_pagination(client, payload, expected_erro
     assert response.status_code == 400
     data = json.loads(response.data)
     assert data['error'] == expected_error
+
+
+def test_execute_aql_query_rejects_writes():
+    """Test execute_aql_query blocks write operations."""
+    with pytest.raises(ValueError) as exc_info:
+        execute_aql_query('REMOVE doc IN genes')
+    assert 'Write operations are not allowed' in str(exc_info.value)
+
+
+def test_execute_aql_query_runs_read_query():
+    """Test execute_aql_query applies LIMIT and queries the graph."""
+    mock_graph = Mock()
+    mock_graph.query.return_value = [{'_id': 'genes/1', 'name': 'SAMD11'}]
+    with patch('app.graph', mock_graph):
+        result = execute_aql_query(
+            'FOR gene IN genes RETURN gene', limit=100, offset=0)
+
+    mock_graph.query.assert_called_once_with(
+        'FOR gene IN genes LIMIT 0, 100 RETURN gene', 100)
+    assert result['aql_query'] == 'FOR gene IN genes LIMIT 0, 100 RETURN gene'
+    assert result['aql_result'] == [{'_id': 'genes/1', 'name': 'SAMD11'}]
+    assert 'result' not in result
+
+
+def test_index_page(client):
+    """Test the explorer UI is served at /."""
+    response = client.get('/')
+    assert response.status_code == 200
+    assert b'IGVF Catalog AQL Explorer' in response.data
+    assert b'Generate AQL' in response.data
+    assert b'Run query' in response.data
+
+
+def test_graph_query_generator_execute_missing_data(client):
+    """Test graph-query-generator execute endpoint with missing data."""
+    response = client.post('/graph-query-generator/execute', json={})
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert 'password and aql are required' in data['error']
+
+
+def test_graph_query_generator_execute_wrong_password(client):
+    """Test graph-query-generator execute endpoint with wrong password."""
+    response = client.post('/graph-query-generator/execute', json={
+        'password': 'wrong_password',
+        'aql': 'FOR gene IN genes RETURN gene'
+    })
+    assert response.status_code == 403
+    data = json.loads(response.data)
+    assert data['error'] == 'wrong password'
+
+
+def test_graph_query_generator_execute_success(client):
+    """Test graph-query-generator execute endpoint with a valid read query."""
+    with patch('app.graph', Mock()), \
+            patch('app.execute_aql_query') as mock_execute:
+
+        mock_execute.return_value = {
+            'aql_query': 'FOR gene IN genes LIMIT 0, 100 RETURN gene',
+            'aql_result': [{'_id': 'genes/1'}]
+        }
+
+        response = client.post('/graph-query-generator/execute', json={
+            'password': 'test_password',
+            'aql': 'FOR gene IN genes RETURN gene'
+        })
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['aql_query'] == 'FOR gene IN genes LIMIT 0, 100 RETURN gene'
+        assert data['aql_result'] == [{'_id': 'genes/1'}]
+        assert 'result' not in data
+        mock_execute.assert_called_once_with(
+            'FOR gene IN genes RETURN gene', limit=100, offset=0)
+
+
+def test_graph_query_generator_execute_service_unavailable(client):
+    """Test graph-query-generator execute endpoint when ArangoDB is not available."""
+    with patch('app.graph', None):
+        response = client.post('/graph-query-generator/execute', json={
+            'password': 'test_password',
+            'aql': 'FOR gene IN genes RETURN gene'
+        })
+
+    assert response.status_code == 503
+    data = json.loads(response.data)
+    assert 'ArangoDB graph not initialized properly' in data['error']
+
+
+def test_graph_query_generator_execute_write_returns_422(client):
+    """Test graph-query-generator execute endpoint rejects write AQL."""
+    with patch('app.graph', Mock()), \
+            patch('app.execute_aql_query') as mock_execute:
+        mock_execute.side_effect = ValueError(
+            'Write operations are not allowed')
+        response = client.post('/graph-query-generator/execute', json={
+            'password': 'test_password',
+            'aql': 'REMOVE doc IN genes'
+        })
+
+    assert response.status_code == 422
+    data = json.loads(response.data)
+    assert data['error'] == 'Write operations are not allowed'
