@@ -2,8 +2,8 @@ import json
 import logging
 import os
 import re
+from flask import Flask, request, jsonify
 from flask.logging import default_handler
-from flask import Flask, request, jsonify, render_template
 from arango import ArangoClient
 from langchain_community.graphs import ArangoGraph
 from langchain.chains import ArangoGraphQAChain
@@ -18,7 +18,6 @@ from constants import (
     AQL_CODE_BLOCK_PATTERN,
     AQL_COUNT_AGGREGATION_PATTERN,
     AQL_LIMIT_PATTERN,
-    AQL_WRITE_PATTERN,
     BACKEND_URL,
     DB_NAME,
     MAX_AQL_GENERATION_ATTEMPTS,
@@ -33,20 +32,11 @@ from prompt_template import (
 
 # Initialize Flask app
 app = Flask(__name__)
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 6c2b825 (use logging)
 app.logger.setLevel(logging.INFO)
 default_handler.setFormatter(logging.Formatter(
     '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
     datefmt='%d/%b/%Y %H:%M:%S',
 ))
-<<<<<<< HEAD
-=======
->>>>>>> ece420f (add endpoint aql)
-=======
->>>>>>> 6c2b825 (use logging)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address, storage_uri='memory://')
@@ -146,10 +136,6 @@ def _prepare_graph_for_question(question):
         graph, collection_schema, selected_collection_names)
 
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 6c2b825 (use logging)
 def _numeric(value, integer=False):
     try:
         return int(value) if integer else float(value)
@@ -176,11 +162,6 @@ def _log_openai_usage(cb, endpoint):
     }))
 
 
-<<<<<<< HEAD
-=======
->>>>>>> ece420f (add endpoint aql)
-=======
->>>>>>> 6c2b825 (use logging)
 def ask_llm(question):
     updated_graph = _prepare_graph_for_question(question)
     chain = _build_chain(updated_graph)
@@ -204,35 +185,17 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
         aql_examples=aql_examples,
     )
     with get_openai_callback() as cb:
-<<<<<<< HEAD
-<<<<<<< HEAD
         generation = chain.aql_generation_chain.invoke(
-=======
-        aql_generation_output = chain.aql_generation_chain.run(
->>>>>>> ece420f (add endpoint aql)
-=======
-        generation = chain.aql_generation_chain.invoke(
->>>>>>> 6c2b825 (use logging)
             {
                 'adb_schema': updated_graph.schema,
                 'aql_examples': aql_examples,
                 'user_input': question,
             }
         )
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 6c2b825 (use logging)
         _log_openai_usage(cb, 'graph-query-generator')
     aql_generation_output = (
         generation['text'] if isinstance(generation, dict) else generation
     )
-<<<<<<< HEAD
-=======
-        print(cb)
->>>>>>> ece420f (add endpoint aql)
-=======
->>>>>>> 6c2b825 (use logging)
     aql_query = extract_aql(aql_generation_output)
     if not aql_query:
         return {
@@ -248,31 +211,6 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
             offset=offset,
         ),
     }
-
-
-def execute_aql_query(aql_query, limit=MAX_AQL_LIMIT, offset=0):
-    if AQL_WRITE_PATTERN.search(aql_query):
-        raise ValueError('Write operations are not allowed')
-    limited_aql = apply_aql_limit(aql_query, limit=limit, offset=offset)
-    return {
-        'aql_query': limited_aql,
-        'aql_result': graph.query(limited_aql, limit),
-    }
-
-
-def _parse_limit_and_page(data):
-    try:
-        limit = int(data.get('limit', MAX_AQL_LIMIT))
-        page = int(data.get('page', 0))
-    except (TypeError, ValueError):
-        return None, None, (jsonify({'error': 'limit and page must be integers'}), 400)
-    if page < 0:
-        return None, None, (jsonify({'error': 'page must be a non-negative integer'}), 400)
-    if limit < 1 or limit > MAX_AQL_LIMIT:
-        return None, None, (jsonify({
-            'error': f'limit must be between 1 and {MAX_AQL_LIMIT}'
-        }), 400)
-    return limit, page * limit, None
 
 
 graph, arango_healthy, arango_error = initialize_arango_graph()
@@ -347,21 +285,9 @@ def query():
         return jsonify(error), 500
 
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 @app.route('/graph-query-generator', methods=['POST'])
 @limiter.limit('10 per minute')
 def graph_query_generator():
-=======
-@app.route('/aql', methods=['POST'])
-@limiter.limit('10 per minute')
-def aql():
->>>>>>> ece420f (add endpoint aql)
-=======
-@app.route('/graph-query-generator', methods=['POST'])
-@limiter.limit('10 per minute')
-def graph_query_generator():
->>>>>>> 2090e32 (rename endpoint)
     data = request.get_json()
     if not data or 'password' not in data or 'query' not in data:
         return jsonify({'error': 'password and query are required'}), 400
@@ -370,9 +296,18 @@ def graph_query_generator():
         return jsonify({'error': 'wrong password'}), 403
 
     user_query = data['query']
-    limit, offset, pagination_error = _parse_limit_and_page(data)
-    if pagination_error:
-        return pagination_error
+    try:
+        limit = int(data.get('limit', MAX_AQL_LIMIT))
+        page = int(data.get('page', 0))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'limit and page must be integers'}), 400
+    if page < 0:
+        return jsonify({'error': 'page must be a non-negative integer'}), 400
+    if limit < 1 or limit > MAX_AQL_LIMIT:
+        return jsonify({
+            'error': f'limit must be between 1 and {MAX_AQL_LIMIT}'
+        }), 400
+    offset = page * limit
 
     if not model or not graph or not collection_schema:
         return jsonify({'error': 'LLM or ArangoDB graph not initialized properly'}), 503
@@ -398,41 +333,6 @@ def graph_query_generator():
             'error': str(e)
         }
         return jsonify(error), 500
-
-
-@app.route('/graph-query-generator/execute', methods=['POST'])
-@limiter.limit('10 per minute')
-def graph_query_generator_execute():
-    data = request.get_json()
-    if not data or 'password' not in data or 'aql' not in data:
-        return jsonify({'error': 'password and aql are required'}), 400
-
-    if data['password'] != os.environ.get('CATALOG_PASSWORD'):
-        return jsonify({'error': 'wrong password'}), 403
-
-    aql_query = data['aql']
-    if not isinstance(aql_query, str) or not aql_query.strip():
-        return jsonify({'error': 'aql must be a non-empty string'}), 400
-
-    limit, offset, pagination_error = _parse_limit_and_page(data)
-    if pagination_error:
-        return pagination_error
-
-    if not graph:
-        return jsonify({'error': 'ArangoDB graph not initialized properly'}), 503
-
-    try:
-        response = execute_aql_query(aql_query, limit=limit, offset=offset)
-        return jsonify(build_response(response))
-    except ValueError as e:
-        return jsonify({'aql_query': aql_query, 'error': str(e)}), 422
-    except Exception as e:
-        return jsonify({'aql_query': aql_query, 'error': str(e)}), 500
-
-
-@app.route('/', methods=['GET'])
-def index():
-    return render_template('index.html', max_aql_limit=MAX_AQL_LIMIT)
 
 # Create Flask endpoint for health check
 
