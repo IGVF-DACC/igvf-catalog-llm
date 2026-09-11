@@ -212,6 +212,65 @@ def test_extract_aql_unfenced_query():
         0,
         'RETURN LENGTH(genes)',
     ),
+    (
+        '''FOR gene IN genes
+  LET neighbors = (
+    FOR edge IN diseases_genes
+      FILTER edge._to == gene._id
+      LIMIT 0, 100
+      RETURN edge
+  )
+  LIMIT 10
+  RETURN { gene, neighbors }''',
+        100,
+        0,
+        '''FOR gene IN genes
+  LET neighbors = (
+    FOR edge IN diseases_genes
+      FILTER edge._to == gene._id
+      LIMIT 0, 100
+      RETURN edge
+  )
+  LIMIT 0, 100
+  RETURN { gene, neighbors }''',
+    ),
+    (
+        '''FOR gene IN genes
+  LET neighbors = (
+    FOR edge IN diseases_genes
+      FILTER edge._to == gene._id
+      LIMIT 5
+      RETURN edge
+  )
+  RETURN { gene, neighbors }''',
+        100,
+        0,
+        '''FOR gene IN genes
+  LET neighbors = (
+    FOR edge IN diseases_genes
+      FILTER edge._to == gene._id
+      LIMIT 5
+      RETURN edge
+  )
+  LIMIT 0, 100
+  RETURN { gene, neighbors }''',
+    ),
+    (
+        '''FOR gene IN genes
+  LIMIT 10
+FOR edge IN diseases_genes
+  FILTER edge._to == gene._id
+  LIMIT 5
+  RETURN { gene, edge }''',
+        100,
+        0,
+        '''FOR gene IN genes
+  LIMIT 10
+FOR edge IN diseases_genes
+  FILTER edge._to == gene._id
+  LIMIT 0, 100
+  RETURN { gene, edge }''',
+    ),
 ])
 def test_apply_aql_limit(aql_query, limit, offset, expected):
     """Test LIMIT rewrite for /graph-query-generator generation."""

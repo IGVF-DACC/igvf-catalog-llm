@@ -81,19 +81,56 @@ def extract_aql(aql_generation_output):
     return None
 
 
+def _paren_depth_at(text, index):
+    depth = 0
+    for ch in text[:index]:
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth = max(0, depth - 1)
+    return depth
+
+
+def _top_level_match(pattern, text, last=False):
+    # Depth-0 matches only (ignore text inside (...) subqueries).
+    # last=False: first match — used for RETURN so LIMIT is inserted before it.
+    # last=True: last match — used for LIMIT so the result-set LIMIT is rewritten.
+    found = None
+    for match in pattern.finditer(text):
+        if _paren_depth_at(text, match.start()) == 0:
+            if not last:
+                return match
+            found = match
+    return found
+
+
 def apply_aql_limit(aql_query, limit, offset=0):
+    # Skip count/aggregation queries; LIMIT would change the result.
     if AQL_COUNT_AGGREGATION_PATTERN.search(aql_query):
         return aql_query
 
     limit_clause = f'LIMIT {offset}, {limit}'
-    if AQL_LIMIT_PATTERN.search(aql_query):
-        return AQL_LIMIT_PATTERN.sub(limit_clause, aql_query, count=1)
+    # Replace the last top-level LIMIT (paginates RETURN rows),
+    # not a LIMIT inside a subquery or an earlier intermediate LIMIT.
+    limit_match = _top_level_match(AQL_LIMIT_PATTERN, aql_query, last=True)
+    if limit_match:
+        return (
+            aql_query[:limit_match.start()]
+            + limit_clause
+            + aql_query[limit_match.end():]
+        )
 
-    return_match = re.search(r'\bRETURN\b', aql_query, re.IGNORECASE)
+    # No top-level LIMIT: insert one immediately before the top-level RETURN.
+    return_match = _top_level_match(
+        re.compile(r'\bRETURN\b', re.IGNORECASE), aql_query)
     if return_match:
-        before_return = aql_query[:return_match.start()].rstrip()
+        before_return = aql_query[:return_match.start()]
         after_return = aql_query[return_match.start():]
-        return f'{before_return} {limit_clause} {after_return}'
+        stripped = before_return.rstrip(' \t')
+        if stripped.endswith('\n'):
+            indent = before_return[len(stripped):]
+            return f'{stripped}{indent}{limit_clause}\n{indent}{after_return}'
+        return f'{before_return.rstrip()} {limit_clause} {after_return}'
     return aql_query
 
 
