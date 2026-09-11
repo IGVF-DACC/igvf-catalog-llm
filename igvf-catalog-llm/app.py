@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import re
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask.logging import default_handler
 from arango import ArangoClient
 from langchain_community.graphs import ArangoGraph
@@ -18,6 +18,7 @@ from constants import (
     AQL_CODE_BLOCK_PATTERN,
     AQL_COUNT_AGGREGATION_PATTERN,
     AQL_LIMIT_PATTERN,
+    AQL_WRITE_PATTERN,
     BACKEND_URL,
     DB_NAME,
     MAX_AQL_GENERATION_ATTEMPTS,
@@ -213,6 +214,31 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
     }
 
 
+def execute_aql_query(aql_query, limit=MAX_AQL_LIMIT, offset=0):
+    if AQL_WRITE_PATTERN.search(aql_query):
+        raise ValueError('Write operations are not allowed')
+    limited_aql = apply_aql_limit(aql_query, limit=limit, offset=offset)
+    return {
+        'aql_query': limited_aql,
+        'aql_result': graph.query(limited_aql, limit),
+    }
+
+
+def _parse_limit_and_page(data):
+    try:
+        limit = int(data.get('limit', MAX_AQL_LIMIT))
+        page = int(data.get('page', 0))
+    except (TypeError, ValueError):
+        return None, None, (jsonify({'error': 'limit and page must be integers'}), 400)
+    if page < 0:
+        return None, None, (jsonify({'error': 'page must be a non-negative integer'}), 400)
+    if limit < 1 or limit > MAX_AQL_LIMIT:
+        return None, None, (jsonify({
+            'error': f'limit must be between 1 and {MAX_AQL_LIMIT}'
+        }), 400)
+    return limit, page * limit, None
+
+
 graph, arango_healthy, arango_error = initialize_arango_graph()
 if graph:
     collection_schema = graph.schema['Collection Schema']
@@ -296,18 +322,9 @@ def graph_query_generator():
         return jsonify({'error': 'wrong password'}), 403
 
     user_query = data['query']
-    try:
-        limit = int(data.get('limit', MAX_AQL_LIMIT))
-        page = int(data.get('page', 0))
-    except (TypeError, ValueError):
-        return jsonify({'error': 'limit and page must be integers'}), 400
-    if page < 0:
-        return jsonify({'error': 'page must be a non-negative integer'}), 400
-    if limit < 1 or limit > MAX_AQL_LIMIT:
-        return jsonify({
-            'error': f'limit must be between 1 and {MAX_AQL_LIMIT}'
-        }), 400
-    offset = page * limit
+    limit, offset, pagination_error = _parse_limit_and_page(data)
+    if pagination_error:
+        return pagination_error
 
     if not model or not graph or not collection_schema:
         return jsonify({'error': 'LLM or ArangoDB graph not initialized properly'}), 503
@@ -333,6 +350,41 @@ def graph_query_generator():
             'error': str(e)
         }
         return jsonify(error), 500
+
+
+@app.route('/graph-query-generator/execute', methods=['POST'])
+@limiter.limit('10 per minute')
+def graph_query_generator_execute():
+    data = request.get_json()
+    if not data or 'password' not in data or 'aql' not in data:
+        return jsonify({'error': 'password and aql are required'}), 400
+
+    if data['password'] != os.environ.get('CATALOG_PASSWORD'):
+        return jsonify({'error': 'wrong password'}), 403
+
+    aql_query = data['aql']
+    if not isinstance(aql_query, str) or not aql_query.strip():
+        return jsonify({'error': 'aql must be a non-empty string'}), 400
+
+    limit, offset, pagination_error = _parse_limit_and_page(data)
+    if pagination_error:
+        return pagination_error
+
+    if not graph:
+        return jsonify({'error': 'ArangoDB graph not initialized properly'}), 503
+
+    try:
+        response = execute_aql_query(aql_query, limit=limit, offset=offset)
+        return jsonify(build_response(response))
+    except ValueError as e:
+        return jsonify({'aql_query': aql_query, 'error': str(e)}), 422
+    except Exception as e:
+        return jsonify({'aql_query': aql_query, 'error': str(e)}), 500
+
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html', max_aql_limit=MAX_AQL_LIMIT)
 
 # Create Flask endpoint for health check
 
