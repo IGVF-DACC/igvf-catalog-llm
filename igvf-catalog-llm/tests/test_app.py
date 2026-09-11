@@ -2,15 +2,18 @@ import pytest
 import os
 import json
 from unittest.mock import Mock, patch, MagicMock
-from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, get_updated_graph
+from app import app, initialize_arango_graph, initialize_collection_names, build_response, ask_llm, generate_aql, extract_aql, apply_aql_limit, _log_openai_usage, get_updated_graph, limiter
+from constants import MAX_AQL_GENERATION_ATTEMPTS, MAX_AQL_LIMIT, QUERY_AQL_LIMIT
 
 
 @pytest.fixture
 def client():
     """Create a test client for the Flask app."""
     app.config['TESTING'] = True
+    limiter.enabled = False
     with app.test_client() as client:
         yield client
+    limiter.enabled = True
 
 
 # Environment variables are set in conftest.py for app.py import
@@ -149,8 +152,8 @@ def test_ask_llm_success(mock_callback, mock_chain_class, mock_get_graph, mock_s
         assert call_args[1]['allow_dangerous_requests'] == True
 
         # Verify chain properties
-        assert mock_chain.top_k == 5
-        assert mock_chain.max_aql_generation_attempts == 5
+        assert mock_chain.top_k == QUERY_AQL_LIMIT
+        assert mock_chain.max_aql_generation_attempts == MAX_AQL_GENERATION_ATTEMPTS
         assert mock_chain.return_aql_query == True
         assert mock_chain.return_aql_result == True
         assert mock_chain.aql_examples == 'test examples'
@@ -165,6 +168,165 @@ def test_ask_llm_success(mock_callback, mock_chain_class, mock_get_graph, mock_s
             'result': 'test result',
             'aql_query': 'FOR doc IN genes RETURN doc'
         }
+
+
+def test_extract_aql_from_fenced_block():
+    """Test AQL extraction from a fenced code block."""
+    output = '```aql\nFOR doc IN genes RETURN doc\n```'
+    assert extract_aql(output) == 'FOR doc IN genes RETURN doc'
+
+
+def test_extract_aql_invalid_response():
+    """Test AQL extraction returns None when no query is present."""
+    assert extract_aql('I cannot help with that request.') is None
+
+
+def test_extract_aql_unfenced_query():
+    """Test AQL extraction accepts a query without code fences."""
+    output = 'FOR doc IN genes RETURN doc'
+    assert extract_aql(output) == output
+
+
+@pytest.mark.parametrize('aql_query,limit,offset,expected', [
+    (
+        'FOR doc IN genes RETURN doc',
+        100,
+        0,
+        'FOR doc IN genes LIMIT 0, 100 RETURN doc',
+    ),
+    (
+        'FOR doc IN genes LIMIT 5 RETURN doc',
+        100,
+        0,
+        'FOR doc IN genes LIMIT 0, 100 RETURN doc',
+    ),
+    (
+        'FOR doc IN genes LIMIT 0, 5 RETURN doc',
+        50,
+        50,
+        'FOR doc IN genes LIMIT 50, 50 RETURN doc',
+    ),
+    (
+        'RETURN LENGTH(genes)',
+        100,
+        0,
+        'RETURN LENGTH(genes)',
+    ),
+])
+def test_apply_aql_limit(aql_query, limit, offset, expected):
+    """Test LIMIT rewrite for /graph-query-generator generation."""
+    assert apply_aql_limit(aql_query, limit=limit, offset=offset) == expected
+
+
+def test_log_openai_usage_writes_json(caplog):
+    """OpenAI callback usage is logged as one JSON object."""
+    cb = Mock(
+        total_tokens=100,
+        prompt_tokens=80,
+        prompt_tokens_cached=0,
+        completion_tokens=20,
+        reasoning_tokens=0,
+        successful_requests=1,
+        total_cost=0.001,
+    )
+    with caplog.at_level('INFO', logger='app'):
+        _log_openai_usage(cb, 'query')
+    payload = json.loads(caplog.records[-1].message)
+    assert payload['event'] == 'openai_usage'
+    assert payload['endpoint'] == 'query'
+    assert payload['total_tokens'] == 100
+    assert payload['total_cost_usd'] == 0.001
+
+
+@patch('app.select_collections')
+@patch('app.get_updated_graph')
+@patch('app.ArangoGraphQAChain')
+@patch('app.get_openai_callback')
+@patch('app.get_aql_examples')
+@patch('app.get_aql_generation_prompt')
+def test_generate_aql_does_not_invoke_chain(
+        mock_get_prompt, mock_get_examples, mock_callback, mock_chain_class,
+        mock_get_graph, mock_select_collections):
+    """Test generate_aql uses aql_generation_chain and does not run the full QA chain."""
+    mock_select_collections.return_value = ['genes']
+    mock_graph = Mock()
+    mock_graph.schema = {'Collection Schema': []}
+    mock_get_graph.return_value = mock_graph
+    mock_get_prompt.return_value = 'aql only prompt'
+    mock_get_examples.return_value = 'aql only examples'
+
+    mock_chain = Mock()
+    mock_chain_class.from_llm.return_value = mock_chain
+    mock_chain.aql_generation_chain.invoke.return_value = {
+        'text': '```aql\nFOR doc IN genes RETURN doc\n```'
+    }
+
+    mock_cb = Mock()
+    mock_callback.return_value.__enter__.return_value = mock_cb
+    mock_callback.return_value.__exit__.return_value = None
+
+    with patch('app.collection_names', ['genes', 'variants']), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', [{'collection_name': 'genes'}]), \
+            patch('app.model', Mock()):
+
+        result = generate_aql('test question')
+
+        mock_get_prompt.assert_called_once_with(limit=100, offset=0)
+        mock_get_examples.assert_called_once_with(limit=100, offset=0)
+        mock_chain_class.from_llm.assert_called_once()
+        assert mock_chain_class.from_llm.call_args[1]['aql_generation_prompt'] == 'aql only prompt'
+        mock_chain.aql_generation_chain.invoke.assert_called_once_with({
+            'adb_schema': mock_graph.schema,
+            'aql_examples': 'aql only examples',
+            'user_input': 'test question',
+        })
+        mock_chain.invoke.assert_not_called()
+        mock_graph.query.assert_not_called()
+
+        assert result == {
+            'query': 'test question',
+            'aql_query': 'FOR doc IN genes LIMIT 0, 100 RETURN doc'
+        }
+        assert 'result' not in result
+
+
+@patch('app.select_collections')
+@patch('app.get_updated_graph')
+@patch('app.ArangoGraphQAChain')
+@patch('app.get_openai_callback')
+@patch('app.get_aql_examples')
+@patch('app.get_aql_generation_prompt')
+def test_generate_aql_invalid_response_does_not_raise(
+        mock_get_prompt, mock_get_examples, mock_callback, mock_chain_class,
+        mock_get_graph, mock_select_collections):
+    """Test generate_aql returns an error payload when no AQL is produced."""
+    mock_select_collections.return_value = ['genes']
+    mock_graph = Mock()
+    mock_graph.schema = {'Collection Schema': []}
+    mock_get_graph.return_value = mock_graph
+    mock_get_prompt.return_value = 'aql only prompt'
+    mock_get_examples.return_value = 'aql only examples'
+
+    mock_chain = Mock()
+    mock_chain_class.from_llm.return_value = mock_chain
+    mock_chain.aql_generation_chain.invoke.return_value = {
+        'text': 'I cannot help with that request.'
+    }
+    mock_callback.return_value.__enter__.return_value = Mock()
+    mock_callback.return_value.__exit__.return_value = None
+
+    with patch('app.collection_names', ['genes']), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', [{'collection_name': 'genes'}]), \
+            patch('app.model', Mock()):
+
+        result = generate_aql('test question')
+
+        assert result['query'] == 'test question'
+        assert result['aql_query'] is None
+        assert 'Response is Invalid' in result['error']
+        assert 'result' not in result
 
 
 def test_health_check_success(client):
@@ -327,3 +489,177 @@ def test_query_value_error_returns_422(client):
         assert 'error' in data
         assert data['error'] == 'validation failed'
         assert data['query'] == 'test query'
+
+
+def test_graph_query_generator_missing_data(client):
+    """Test graph-query-generator endpoint with missing data."""
+    response = client.post('/graph-query-generator', json={})
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert 'error' in data
+    assert 'password and query are required' in data['error']
+
+
+def test_graph_query_generator_wrong_password(client):
+    """Test graph-query-generator endpoint with wrong password."""
+    response = client.post('/graph-query-generator', json={
+        'password': 'wrong_password',
+        'query': 'test query'
+    })
+    assert response.status_code == 403
+    data = json.loads(response.data)
+    assert 'error' in data
+    assert 'wrong password' in data['error']
+
+
+def test_graph_query_generator_correct_password(client):
+    """Test graph-query-generator endpoint with correct password."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.generate_aql') as mock_generate_aql:
+
+        mock_generate_aql.return_value = {
+            'query': 'test query',
+            'aql_query': 'FOR doc IN collection RETURN doc'
+        }
+
+        response = client.post('/graph-query-generator', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['query'] == 'test query'
+        assert data['aql_query'] == 'FOR doc IN collection RETURN doc'
+        assert 'result' not in data
+        assert 'aql_result' not in data
+        assert data['title'] == 'IGVF Catalog LLM Query'
+        mock_generate_aql.assert_called_once_with(
+            'test query', limit=100, offset=0)
+
+
+def test_graph_query_generator_service_unavailable(client):
+    """Test graph-query-generator endpoint when services are not available."""
+    with patch('app.model', None), \
+            patch('app.graph', None), \
+            patch('app.collection_schema', None):
+
+        response = client.post('/graph-query-generator', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 503
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert 'LLM or ArangoDB graph not initialized properly' in data['error']
+
+
+def test_graph_query_generator_exception_handling(client):
+    """Test graph-query-generator endpoint exception handling."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.generate_aql') as mock_generate_aql:
+
+        mock_generate_aql.side_effect = Exception('Test error')
+
+        response = client.post('/graph-query-generator', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 500
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert 'Test error' in data['error']
+        assert data['query'] == 'test query'
+
+
+def test_graph_query_generator_value_error_invalid_response_handling(client):
+    """Test graph-query-generator endpoint special ValueError handling for invalid responses."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.generate_aql') as mock_generate_aql:
+
+        mock_generate_aql.side_effect = ValueError(
+            'Response is Invalid: I cannot help with that request.')
+
+        response = client.post('/graph-query-generator', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data['title'] == 'IGVF Catalog LLM Query'
+        assert data['query'] == 'test query'
+        assert data['error'] == 'Response is Invalid: I cannot help with that request.'
+        assert 'result' not in data
+
+
+def test_graph_query_generator_value_error_returns_422(client):
+    """Test graph-query-generator endpoint generic ValueError handling."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.generate_aql') as mock_generate_aql:
+
+        mock_generate_aql.side_effect = ValueError('validation failed')
+
+        response = client.post('/graph-query-generator', json={
+            'password': 'test_password',
+            'query': 'test query'
+        })
+
+        assert response.status_code == 422
+        data = json.loads(response.data)
+        assert 'error' in data
+        assert data['error'] == 'validation failed'
+        assert data['query'] == 'test query'
+
+
+def test_graph_query_generator_accepts_limit_and_page(client):
+    """Test graph-query-generator endpoint passes limit and page offset to generate_aql."""
+    with patch('app.model', Mock()), \
+            patch('app.graph', Mock()), \
+            patch('app.collection_schema', Mock()), \
+            patch('app.generate_aql') as mock_generate_aql:
+
+        mock_generate_aql.return_value = {
+            'query': 'test query',
+            'aql_query': 'FOR doc IN genes LIMIT 50, 50 RETURN doc'
+        }
+
+        response = client.post('/graph-query-generator', json={
+            'password': 'test_password',
+            'query': 'test query',
+            'limit': 50,
+            'page': 1
+        })
+
+        assert response.status_code == 200
+        mock_generate_aql.assert_called_once_with(
+            'test query', limit=50, offset=50)
+
+
+@pytest.mark.parametrize('payload,expected_error', [
+    ({'limit': 0}, f'limit must be between 1 and {MAX_AQL_LIMIT}'),
+    ({'limit': MAX_AQL_LIMIT + 1}, f'limit must be between 1 and {MAX_AQL_LIMIT}'),
+    ({'page': -1}, 'page must be a non-negative integer'),
+    ({'limit': 'abc'}, 'limit and page must be integers'),
+])
+def test_graph_query_generator_invalid_pagination(client, payload, expected_error):
+    """Test graph-query-generator endpoint rejects invalid limit and page values."""
+    body = {
+        'password': 'test_password',
+        'query': 'test query',
+    }
+    body.update(payload)
+    response = client.post('/graph-query-generator', json=body)
+    assert response.status_code == 400
+    data = json.loads(response.data)
+    assert data['error'] == expected_error
