@@ -214,18 +214,19 @@ def ask_llm(question):
 
 
 def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
-    updated_graph = _prepare_graph_for_question(question)
+    # Full schema: this path only generates AQL, so collection
+    # selection would drop joins more often than it saves tokens.
     aql_prompt = get_aql_generation_prompt(limit=limit, offset=offset)
     aql_examples = get_aql_examples(limit=limit, offset=offset)
     chain = _build_chain(
-        updated_graph,
+        graph,
         aql_generation_prompt=aql_prompt,
         aql_examples=aql_examples,
     )
     with get_openai_callback() as cb:
         generation = chain.aql_generation_chain.invoke(
             {
-                'adb_schema': updated_graph.schema,
+                'adb_schema': graph.schema,
                 'aql_examples': aql_examples,
                 'user_input': question,
             }

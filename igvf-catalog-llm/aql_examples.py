@@ -7,7 +7,7 @@ AQL_EXAMPLES_TEMPLATE = """
     LIMIT {offset}, {limit}
     RETURN gene
 
-    # show me all the vairants that is in chromosome 1, position at 10000000?
+    # show me all the variants that is in chromosome 1, position at 10000000?
     WITH variants
     FOR v IN variants
     FILTER v.chr == "chr1" AND v.pos == 10000000
@@ -37,7 +37,7 @@ AQL_EXAMPLES_TEMPLATE = """
 
     # What are the transcripts from the protein PARI_HUMAN?
     FOR p IN proteins
-        FILTER 'PARI_HUMAN' in p.names
+        FILTER 'PARI_HUMAN' IN p.uniprot_names
         FOR t IN transcripts_proteins
             FILTER t._to == p._id
             LIMIT {offset}, {limit}
@@ -60,15 +60,16 @@ AQL_EXAMPLES_TEMPLATE = """
         FILTER t.name == "heart"
         FOR v, e IN 1..7 INBOUND t ontology_terms_ontology_terms
             FILTER e.name IN ["part of"]
-            RETURN DISTINCT v
+            RETURN DISTINCT v._id
     )
-    FOR tgt IN heartTerms
-        FOR vgt IN variants_genes_terms
-            FILTER vgt._to == tgt._id
-            FOR vg IN variants_genes
-                FILTER vg._id == vgt._from AND vg.label == "eQTL"
-                LIMIT {offset}, {limit}
-                RETURN DISTINCT { term: tgt, variant: vg._from, gene: DOCUMENT(vg._to)}
+    FOR vg IN variants_genes
+        FILTER vg.label == "eQTL" AND vg.biosample_term IN heartTerms
+        LIMIT {offset}, {limit}
+        RETURN DISTINCT {
+            term: DOCUMENT(vg.biosample_term),
+            variant: vg._from,
+            gene: DOCUMENT(vg._to)
+        }
 
     # Find the genomic elements that are linked to PP1F (ENSG00000187642), with score >0.85
     WITH genomic_elements, genomic_elements_genes
@@ -80,15 +81,13 @@ AQL_EXAMPLES_TEMPLATE = """
             RETURN element
 
     # Find the top eQTLs in ontology term named amygdala, sorted by p_value.
-    LET heartTerms = (
+    LET amygdalaTerms = (
     FOR t IN ontology_terms
         FILTER t.name == "amygdala"
-        RETURN t
+        RETURN t._id
     )
-    FOR vgt IN variants_genes_terms
-        FILTER vgt._to in heartTerms[*]._id
-    FOR vg in variants_genes
-        FILTER vgt._from == vg._id AND vg.label == "eQTL"
+    FOR vg IN variants_genes
+        FILTER vg.biosample_term IN amygdalaTerms AND vg.label == "eQTL"
         SORT vg.`p_value` ASC
         LIMIT {offset}, {limit}
         LET gene = DOCUMENT(vg._to)
@@ -145,7 +144,7 @@ AQL_EXAMPLES_TEMPLATE = """
             FILTER v._id == vg._from
             RETURN v
 
-    # What diseases are associated with variant with gene PAH?
+    # What diseases are associated with gene PAH?
     FOR gene IN genes
     FILTER gene.name == "PAH"
     FOR edge IN diseases_genes

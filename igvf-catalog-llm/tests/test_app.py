@@ -306,11 +306,9 @@ def test_log_openai_usage_writes_json(caplog):
 def test_generate_aql_does_not_invoke_chain(
         mock_get_prompt, mock_get_examples, mock_callback, mock_chain_class,
         mock_get_graph, mock_select_collections):
-    """Test generate_aql uses aql_generation_chain and does not run the full QA chain."""
-    mock_select_collections.return_value = ['genes']
+    """Test generate_aql uses aql_generation_chain and the full graph schema."""
     mock_graph = Mock()
-    mock_graph.schema = {'Collection Schema': []}
-    mock_get_graph.return_value = mock_graph
+    mock_graph.schema = {'Collection Schema': [], 'Graph Schema': []}
     mock_get_prompt.return_value = 'aql only prompt'
     mock_get_examples.return_value = 'aql only examples'
 
@@ -324,16 +322,17 @@ def test_generate_aql_does_not_invoke_chain(
     mock_callback.return_value.__enter__.return_value = mock_cb
     mock_callback.return_value.__exit__.return_value = None
 
-    with patch('app.collection_names', ['genes', 'variants']), \
-            patch('app.graph', Mock()), \
-            patch('app.collection_schema', [{'collection_name': 'genes'}]), \
+    with patch('app.graph', mock_graph), \
             patch('app.model', Mock()):
 
         result = generate_aql('test question')
 
+        mock_select_collections.assert_not_called()
+        mock_get_graph.assert_not_called()
         mock_get_prompt.assert_called_once_with(limit=100, offset=0)
         mock_get_examples.assert_called_once_with(limit=100, offset=0)
         mock_chain_class.from_llm.assert_called_once()
+        assert mock_chain_class.from_llm.call_args[1]['graph'] is mock_graph
         assert mock_chain_class.from_llm.call_args[1]['aql_generation_prompt'] == 'aql only prompt'
         mock_chain.aql_generation_chain.invoke.assert_called_once_with({
             'adb_schema': mock_graph.schema,
@@ -360,10 +359,8 @@ def test_generate_aql_invalid_response_does_not_raise(
         mock_get_prompt, mock_get_examples, mock_callback, mock_chain_class,
         mock_get_graph, mock_select_collections):
     """Test generate_aql returns an error payload when no AQL is produced."""
-    mock_select_collections.return_value = ['genes']
     mock_graph = Mock()
     mock_graph.schema = {'Collection Schema': []}
-    mock_get_graph.return_value = mock_graph
     mock_get_prompt.return_value = 'aql only prompt'
     mock_get_examples.return_value = 'aql only examples'
 
@@ -375,13 +372,13 @@ def test_generate_aql_invalid_response_does_not_raise(
     mock_callback.return_value.__enter__.return_value = Mock()
     mock_callback.return_value.__exit__.return_value = None
 
-    with patch('app.collection_names', ['genes']), \
-            patch('app.graph', Mock()), \
-            patch('app.collection_schema', [{'collection_name': 'genes'}]), \
+    with patch('app.graph', mock_graph), \
             patch('app.model', Mock()):
 
         result = generate_aql('test question')
 
+        mock_select_collections.assert_not_called()
+        mock_get_graph.assert_not_called()
         assert result['query'] == 'test question'
         assert result['aql_query'] is None
         assert 'Response is Invalid' in result['error']
