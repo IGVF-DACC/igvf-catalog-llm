@@ -14,3 +14,5 @@ AQL_COUNT_AGGREGATION_PATTERN = re.compile(
 AQL_LIMIT_PATTERN = re.compile(
     r'\bLIMIT\s+\d+(?:\s*,\s*\d+)?\b', re.IGNORECASE)
 AQL_CODE_BLOCK_PATTERN = re.compile(r'```(?i:aql)?(.*?)```', re.DOTALL)
+AQL_WRITE_PATTERN = re.compile(
+    r'\b(INSERT|UPDATE|REPLACE|REMOVE|UPSERT)\b', re.IGNORECASE)
