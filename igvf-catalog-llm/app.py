@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import re
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask.logging import default_handler
 from arango import ArangoClient
 from langchain_community.graphs import ArangoGraph
@@ -18,6 +18,7 @@ from constants import (
     AQL_CODE_BLOCK_PATTERN,
     AQL_COUNT_AGGREGATION_PATTERN,
     AQL_LIMIT_PATTERN,
+    AQL_WRITE_PATTERN,
     BACKEND_URL,
     DB_NAME,
     MAX_AQL_GENERATION_ATTEMPTS,
@@ -80,19 +81,56 @@ def extract_aql(aql_generation_output):
     return None
 
 
+def _paren_depth_at(text, index):
+    depth = 0
+    for ch in text[:index]:
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth = max(0, depth - 1)
+    return depth
+
+
+def _top_level_match(pattern, text, last=False):
+    # Depth-0 matches only (ignore text inside (...) subqueries).
+    # last=False: first match — used for RETURN so LIMIT is inserted before it.
+    # last=True: last match — used for LIMIT so the result-set LIMIT is rewritten.
+    found = None
+    for match in pattern.finditer(text):
+        if _paren_depth_at(text, match.start()) == 0:
+            if not last:
+                return match
+            found = match
+    return found
+
+
 def apply_aql_limit(aql_query, limit, offset=0):
+    # Skip count/aggregation queries; LIMIT would change the result.
     if AQL_COUNT_AGGREGATION_PATTERN.search(aql_query):
         return aql_query
 
     limit_clause = f'LIMIT {offset}, {limit}'
-    if AQL_LIMIT_PATTERN.search(aql_query):
-        return AQL_LIMIT_PATTERN.sub(limit_clause, aql_query, count=1)
+    # Replace the last top-level LIMIT (paginates RETURN rows),
+    # not a LIMIT inside a subquery or an earlier intermediate LIMIT.
+    limit_match = _top_level_match(AQL_LIMIT_PATTERN, aql_query, last=True)
+    if limit_match:
+        return (
+            aql_query[:limit_match.start()]
+            + limit_clause
+            + aql_query[limit_match.end():]
+        )
 
-    return_match = re.search(r'\bRETURN\b', aql_query, re.IGNORECASE)
+    # No top-level LIMIT: insert one immediately before the top-level RETURN.
+    return_match = _top_level_match(
+        re.compile(r'\bRETURN\b', re.IGNORECASE), aql_query)
     if return_match:
-        before_return = aql_query[:return_match.start()].rstrip()
+        before_return = aql_query[:return_match.start()]
         after_return = aql_query[return_match.start():]
-        return f'{before_return} {limit_clause} {after_return}'
+        stripped = before_return.rstrip(' \t')
+        if stripped.endswith('\n'):
+            indent = before_return[len(stripped):]
+            return f'{stripped}{indent}{limit_clause}\n{indent}{after_return}'
+        return f'{before_return.rstrip()} {limit_clause} {after_return}'
     return aql_query
 
 
@@ -176,18 +214,19 @@ def ask_llm(question):
 
 
 def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
-    updated_graph = _prepare_graph_for_question(question)
+    # Full schema: this path only generates AQL, so collection
+    # selection would drop joins more often than it saves tokens.
     aql_prompt = get_aql_generation_prompt(limit=limit, offset=offset)
     aql_examples = get_aql_examples(limit=limit, offset=offset)
     chain = _build_chain(
-        updated_graph,
+        graph,
         aql_generation_prompt=aql_prompt,
         aql_examples=aql_examples,
     )
     with get_openai_callback() as cb:
         generation = chain.aql_generation_chain.invoke(
             {
-                'adb_schema': updated_graph.schema,
+                'adb_schema': graph.schema,
                 'aql_examples': aql_examples,
                 'user_input': question,
             }
@@ -211,6 +250,31 @@ def generate_aql(question, limit=MAX_AQL_LIMIT, offset=0):
             offset=offset,
         ),
     }
+
+
+def execute_aql_query(aql_query, limit=MAX_AQL_LIMIT, offset=0):
+    if AQL_WRITE_PATTERN.search(aql_query):
+        raise ValueError('Write operations are not allowed')
+    limited_aql = apply_aql_limit(aql_query, limit=limit, offset=offset)
+    return {
+        'aql_query': limited_aql,
+        'aql_result': graph.query(limited_aql, limit),
+    }
+
+
+def _parse_limit_and_page(data):
+    try:
+        limit = int(data.get('limit', MAX_AQL_LIMIT))
+        page = int(data.get('page', 0))
+    except (TypeError, ValueError):
+        return None, None, (jsonify({'error': 'limit and page must be integers'}), 400)
+    if page < 0:
+        return None, None, (jsonify({'error': 'page must be a non-negative integer'}), 400)
+    if limit < 1 or limit > MAX_AQL_LIMIT:
+        return None, None, (jsonify({
+            'error': f'limit must be between 1 and {MAX_AQL_LIMIT}'
+        }), 400)
+    return limit, page * limit, None
 
 
 graph, arango_healthy, arango_error = initialize_arango_graph()
@@ -296,18 +360,9 @@ def graph_query_generator():
         return jsonify({'error': 'wrong password'}), 403
 
     user_query = data['query']
-    try:
-        limit = int(data.get('limit', MAX_AQL_LIMIT))
-        page = int(data.get('page', 0))
-    except (TypeError, ValueError):
-        return jsonify({'error': 'limit and page must be integers'}), 400
-    if page < 0:
-        return jsonify({'error': 'page must be a non-negative integer'}), 400
-    if limit < 1 or limit > MAX_AQL_LIMIT:
-        return jsonify({
-            'error': f'limit must be between 1 and {MAX_AQL_LIMIT}'
-        }), 400
-    offset = page * limit
+    limit, offset, pagination_error = _parse_limit_and_page(data)
+    if pagination_error:
+        return pagination_error
 
     if not model or not graph or not collection_schema:
         return jsonify({'error': 'LLM or ArangoDB graph not initialized properly'}), 503
@@ -333,6 +388,41 @@ def graph_query_generator():
             'error': str(e)
         }
         return jsonify(error), 500
+
+
+@app.route('/graph-query-generator/execute', methods=['POST'])
+@limiter.limit('10 per minute')
+def graph_query_generator_execute():
+    data = request.get_json()
+    if not data or 'password' not in data or 'aql' not in data:
+        return jsonify({'error': 'password and aql are required'}), 400
+
+    if data['password'] != os.environ.get('CATALOG_PASSWORD'):
+        return jsonify({'error': 'wrong password'}), 403
+
+    aql_query = data['aql']
+    if not isinstance(aql_query, str) or not aql_query.strip():
+        return jsonify({'error': 'aql must be a non-empty string'}), 400
+
+    limit, offset, pagination_error = _parse_limit_and_page(data)
+    if pagination_error:
+        return pagination_error
+
+    if not graph:
+        return jsonify({'error': 'ArangoDB graph not initialized properly'}), 503
+
+    try:
+        response = execute_aql_query(aql_query, limit=limit, offset=offset)
+        return jsonify(build_response(response))
+    except ValueError as e:
+        return jsonify({'aql_query': aql_query, 'error': str(e)}), 422
+    except Exception as e:
+        return jsonify({'aql_query': aql_query, 'error': str(e)}), 500
+
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html', max_aql_limit=MAX_AQL_LIMIT)
 
 # Create Flask endpoint for health check
 

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IGVF Catalog AQL Explorer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>IGVF Catalog AQL Explorer</h1>
+      <p>Generate AQL from a question, edit it, then run it against the catalog.</p>
+    </div>
+    <label class="password-field">
+      Password
+      <input id="password" type="password" autocomplete="current-password" placeholder="API password">
+    </label>
+  </header>
+
+  <main>
+    <div id="results-error" class="error" role="alert" hidden></div>
+    <section class="panel">
+      <h2>1. Question</h2>
+      <textarea id="question" rows="4" placeholder="Can you tell me the variant with SPDI of NC_000012.12:102855312:C:T is associated with what diseases"></textarea>
+      <div class="row">
+        <button id="generate" type="button">Generate AQL</button>
+        <span id="generate-status" class="status" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2. AQL</h2>
+      <textarea id="aql" rows="10" placeholder="Generated AQL appears here. You can edit it before running."></textarea>
+      <div class="row controls">
+        <label>
+          Limit
+          <input id="limit" type="number" min="1" max="{{ max_aql_limit }}" value="{{ max_aql_limit }}">
+        </label>
+        <label>
+          Page
+          <input id="page" type="number" min="0" value="0">
+        </label>
+        <button id="run" type="button">Run query</button>
+        <span id="run-status" class="status" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="results-header">
+        <h2>3. Results</h2>
+        <div class="view-toggle" role="group" aria-label="Result view">
+          <button id="view-table" type="button" class="active">Table</button>
+          <button id="view-json" type="button">JSON</button>
+          <button id="view-graph" type="button" hidden>Graph</button>
+        </div>
+      </div>
+      <p id="results-meta" class="status"></p>
+      <div id="table-wrap">
+        <table id="results-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+        <p id="table-empty" class="empty">No results yet.</p>
+      </div>
+      <div id="json-wrap" hidden>
+        <pre id="results-json"></pre>
+      </div>
+      <div id="graph-wrap" hidden>
+        <div id="graph"></div>
+        <p id="graph-hover" class="status"></p>
+        <p id="graph-empty" class="empty" hidden>These rows are not graph-shaped. Use Table, or return edges with _from and _to.</p>
+        <p id="graph-hint" class="empty">Scroll to zoom, drag to pan. Hover a node for its id. On large graphs, zoom in to see labels.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>window.MAX_AQL_LIMIT = Number("{{ max_aql_limit }}");</script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
