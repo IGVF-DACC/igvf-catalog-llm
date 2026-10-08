@@ -18,3 +18,17 @@ def test_get_aql_examples_interpolates_limit():
     assert '{limit}' not in examples
     assert 'LIMIT 5' not in examples
     assert '{ chr: v.chr, pos: v.pos}' in examples
+
+
+def test_examples_prefer_selective_vertex_first():
+    """Named-entity queries start from the selective vertex, not edge label."""
+    examples = AQL_EXAMPLES
+    assert 'FILTER o.name == \'cardiomyopathy\'' in examples
+    assert 'FILTER d._to == o._id' in examples
+    assert 'RETURN DOCUMENT(d._from)' in examples
+    assert 'RETURN DOCUMENT(vg._from)' in examples
+    assert 'OUTBOUND' not in examples
+    # Multi-hop ontology walk may still use INBOUND; 1-hop neighbors use DOCUMENT
+    assert 'INBOUND t ontology_terms_ontology_terms' in examples
+    # More selective biosample filter before common label
+    assert 'FILTER vg.biosample_term IN heartTerms AND vg.label == "eQTL"' in examples

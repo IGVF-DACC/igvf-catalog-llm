@@ -1,0 +1,29 @@
+{
+    "$id": "edges/genes_genes.Coxpresdb.json",
+    "db_collection_name": "genes_genes",
+    "allOf": [
+        {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "enum": [
+                        "CoXPresdb"
+                    ]
+                },
+                "method": {
+                    "enum": [
+                        "coexpression"
+                    ]
+                },
+                "label": {
+                    "enum": [
+                        "co-expressed with"
+                    ]
+                },
+                "z_score": {
+                    "type": "number"
+                }
+            }
+        }
+    ]
+}

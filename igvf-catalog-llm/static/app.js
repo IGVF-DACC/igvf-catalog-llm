@@ -2,6 +2,7 @@
   const passwordInput = document.getElementById('password');
   const questionInput = document.getElementById('question');
   const aqlInput = document.getElementById('aql');
+  const aqlSortWarning = document.getElementById('aql-sort-warning');
   const limitInput = document.getElementById('limit');
   const pageInput = document.getElementById('page');
   const generateButton = document.getElementById('generate');
@@ -25,6 +26,9 @@
 
   const maxLimit = Number(window.MAX_AQL_LIMIT || 100);
   let lastRows = [];
+  // idle: not run yet; empty: ran and got 0 rows; rows: ran with data
+  let resultsState = 'idle';
+  let lastElapsedMs = null;
   let currentView = 'table';
   let graph = null;
 
@@ -46,6 +50,22 @@
     resultsError.hidden = false;
     resultsError.textContent = message;
     resultsError.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function aqlHasSort(aql) {
+    return /\bSORT\b/i.test(aql || '');
+  }
+
+  function updateSortWarning() {
+    aqlSortWarning.hidden = !aqlHasSort(aqlInput.value);
+  }
+
+  function formatElapsed(ms) {
+    if (ms < 1000) {
+      return Math.round(ms) + ' ms';
+    }
+    const seconds = ms / 1000;
+    return (seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)) + ' s';
   }
 
   function pagination() {
@@ -90,6 +110,9 @@
     tableBody.innerHTML = '';
     if (!rows.length) {
       tableEmpty.hidden = false;
+      tableEmpty.textContent = resultsState === 'empty'
+        ? 'Query returned 0 rows.'
+        : 'No results yet.';
       return;
     }
     tableEmpty.hidden = true;
@@ -451,11 +474,25 @@
     }
   }
 
-  function renderResults(rows) {
+  function renderResults(rows, state, elapsedMs) {
     lastRows = Array.isArray(rows) ? rows : [];
-    resultsMeta.textContent = lastRows.length
-      ? lastRows.length + ' row' + (lastRows.length === 1 ? '' : 's')
-      : '';
+    if (state === 'executed') {
+      resultsState = lastRows.length ? 'rows' : 'empty';
+      lastElapsedMs = typeof elapsedMs === 'number' ? elapsedMs : null;
+    } else if (state === 'cleared' || state === 'idle') {
+      resultsState = 'idle';
+      lastElapsedMs = null;
+    }
+    if (resultsState === 'idle') {
+      resultsMeta.textContent = '';
+    } else {
+      let meta = lastRows.length
+        + ' row' + (lastRows.length === 1 ? '' : 's');
+      if (lastElapsedMs !== null) {
+        meta += ' · ' + formatElapsed(lastElapsedMs);
+      }
+      resultsMeta.textContent = meta;
+    }
     const graphable = hasGraphRows(lastRows);
     viewGraph.hidden = !graphable;
     renderTable(lastRows);
@@ -492,6 +529,7 @@
         throw new Error(data.error);
       }
       aqlInput.value = data.aql_query || '';
+      updateSortWarning();
       setStatus(generateStatus, data.aql_query ? 'AQL ready' : '');
     } catch (error) {
       setStatus(generateStatus, '');
@@ -500,6 +538,8 @@
       generateButton.disabled = false;
     }
   });
+
+  aqlInput.addEventListener('input', updateSortWarning);
 
   runButton.addEventListener('click', async function () {
     showError('');
@@ -514,21 +554,27 @@
       }
       runButton.disabled = true;
       setStatus(runStatus, 'Running…');
+      const startedAt = performance.now();
       const data = await postJson('/graph-query-generator/execute', {
         password: passwordInput.value,
         aql: aqlInput.value,
         limit: page.limit,
         page: page.page,
       });
+      const elapsedMs = performance.now() - startedAt;
       if (data.aql_query) {
         aqlInput.value = data.aql_query;
       }
-      renderResults(data.aql_result || []);
-      setStatus(runStatus, 'Done');
+      updateSortWarning();
+      renderResults(data.aql_result || [], 'executed', elapsedMs);
+      setStatus(
+        runStatus,
+        (data.aql_result || []).length ? 'Done' : 'Done — 0 rows'
+      );
     } catch (error) {
       setStatus(runStatus, '');
       showError(error.message);
-      renderResults([]);
+      renderResults([], 'cleared');
     } finally {
       runButton.disabled = false;
     }

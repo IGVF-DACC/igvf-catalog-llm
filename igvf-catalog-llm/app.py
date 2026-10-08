@@ -20,6 +20,7 @@ from constants import (
     AQL_LIMIT_PATTERN,
     AQL_WRITE_PATTERN,
     BACKEND_URL,
+    CURATED_EDGE_SCHEMA_PATH,
     DB_NAME,
     MAX_AQL_GENERATION_ATTEMPTS,
     MAX_AQL_LIMIT,
@@ -30,6 +31,7 @@ from prompt_template import (
     AQL_GENERATION_PROMPT,
     get_aql_generation_prompt,
 )
+from schema_merge import apply_curated_edge_schema
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -45,18 +47,39 @@ limiter.init_app(app)
 
 
 def initialize_arango_graph():
-    # Connect to ArangoDB and initialize graph
-
+    # Connect to ArangoDB, build graph, and merge curated edge schema.
     username = os.environ['CATALOG_USERNAME']
     password = os.environ['CATALOG_PASSWORD']
     client = ArangoClient(hosts=BACKEND_URL)
     try:
         db = client.db(DB_NAME, username=username, password=password)
-        # Return graph, connection status (True), and no error
-        return ArangoGraph(db), True, None
+        graph = ArangoGraph(db)
     except Exception as e:
-        # Return None graph, connection status (False), and the error
         return None, False, str(e)
+
+    if CURATED_EDGE_SCHEMA_PATH.is_file():
+        try:
+            apply_curated_edge_schema(
+                graph,
+                curated_path=CURATED_EDGE_SCHEMA_PATH,
+            )
+            app.logger.info(
+                'Merged curated edge schema from %s',
+                CURATED_EDGE_SCHEMA_PATH,
+            )
+        except Exception as e:
+            app.logger.error(
+                'Failed to merge curated edge schema from %s: %s; '
+                'using live graph schema',
+                CURATED_EDGE_SCHEMA_PATH,
+                e,
+            )
+    else:
+        app.logger.warning(
+            'Curated edge schema not found at %s; using live graph schema',
+            CURATED_EDGE_SCHEMA_PATH,
+        )
+    return graph, True, None
 
 
 def initialize_collection_names(collection_schema):

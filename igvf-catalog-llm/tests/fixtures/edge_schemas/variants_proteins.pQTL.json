@@ -1,0 +1,42 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "edges/variants_proteins.pQTL.json",
+    "db_collection_name": "variants_proteins",
+    "allOf": [
+        {
+            "$ref": "edges.base.json"
+        },
+        {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "enum": [
+                        "pQTL"
+                    ]
+                },
+                "method": {
+                    "enum": [
+                        "pQTL"
+                    ]
+                },
+                "source": {
+                    "enum": [
+                        "UKB"
+                    ]
+                },
+                "beta": {
+                    "type": "number",
+                    "description": "Effect size."
+                },
+                "neg_log10_pvalue": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "method",
+                "label",
+                "beta"
+            ]
+        }
+    ]
+}

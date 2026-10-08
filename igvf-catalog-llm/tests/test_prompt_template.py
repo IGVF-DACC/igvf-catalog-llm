@@ -18,6 +18,25 @@ def test_query_prompt_uses_limit_zero_five():
     assert 'LIMIT 0, 5' in formatted_prompt
     assert 'offset=0' in formatted_prompt
     assert 'count=5' in formatted_prompt
+    assert 'AQL performance / optimization' in formatted_prompt
+    assert 'Never scan a large edge collection by `label`' in formatted_prompt
+    assert 'Preferred shape (vertex first, indexed `method`, early LIMIT, DOCUMENT)' in formatted_prompt
+    assert 'How to use edge `subtypes`' in formatted_prompt
+    assert 'Multi-shape' in formatted_prompt
+    assert 'discriminators' in formatted_prompt
+    assert 'Do not mix fields from different subtypes' in formatted_prompt
+    assert 'limited to shared handles' in formatted_prompt
+    assert 'not again under `properties`' in formatted_prompt
+    assert 'use `method` if that subtype' in formatted_prompt
+    assert 'Prefer `method` because it is always indexed' in formatted_prompt
+    assert 'vp.method == "ADASTRA"' in formatted_prompt
+    assert 'Identifier lookup (nodes):' in formatted_prompt
+    assert 'Do not use `uniprot_names` for a bare gene symbol' in formatted_prompt
+    assert '"rs…" IN v.rsid' in formatted_prompt
+    assert 'Do not nest' in formatted_prompt
+    assert 'RETURN DOCUMENT(vp._from)' in formatted_prompt
+    assert 'Avoid `INBOUND`/`OUTBOUND` for simple 1-hop lookups' in formatted_prompt
+    assert '1-hop traversal — DO NOT' in formatted_prompt
 
 
 def test_get_aql_generation_prompt_interpolates_limit():
