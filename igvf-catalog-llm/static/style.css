@@ -167,6 +167,17 @@ button:disabled {
   z-index: 10;
 }
 
+.warning {
+  color: #7a5b10;
+  background: #fbf5e6;
+  border: 1px solid #e6d7a8;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.65rem 0 0;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
 #table-wrap {
   overflow-x: auto;
   max-width: 100%;

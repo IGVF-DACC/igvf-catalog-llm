@@ -1,0 +1,29 @@
+{
+    "$id": "edges/genes_genes.GeneGeneBiogrid.json",
+    "db_collection_name": "genes_genes",
+    "allOf": [
+        {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "enum": [
+                        "BioGRID"
+                    ]
+                },
+                "method": {
+                    "enum": [
+                        "physical association"
+                    ]
+                },
+                "label": {
+                    "enum": [
+                        "interacts with"
+                    ]
+                },
+                "z_score": {
+                    "type": "number"
+                }
+            }
+        }
+    ]
+}

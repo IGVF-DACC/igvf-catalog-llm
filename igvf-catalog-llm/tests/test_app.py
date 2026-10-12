@@ -111,6 +111,87 @@ def test_get_updated_graph_nonexistent_collection():
     assert len(result.schema['Collection Schema']) == 0
 
 
+def _patch_arango_connect(mock_graph=None):
+    """Return context managers that stub Arango client + graph construction."""
+    if mock_graph is None:
+        mock_graph = Mock()
+    mock_db = Mock()
+    mock_client = Mock()
+    mock_client.db.return_value = mock_db
+    return (
+        patch('app.ArangoClient', return_value=mock_client),
+        patch('app.ArangoGraph', return_value=mock_graph),
+        mock_graph,
+    )
+
+
+def test_initialize_arango_graph_merges_curated_schema(tmp_path):
+    """Successful connect merges curated edge schema when the file exists."""
+    curated = tmp_path / 'curated.json'
+    curated.write_text('{}')
+    client_patch, graph_patch, mock_graph = _patch_arango_connect()
+    with client_patch, graph_patch, \
+            patch('app.CURATED_EDGE_SCHEMA_PATH', curated), \
+            patch('app.apply_curated_edge_schema') as mock_apply:
+        mock_apply.return_value = {'Collection Schema': []}
+        graph, healthy, error = initialize_arango_graph()
+
+    assert healthy is True
+    assert error is None
+    assert graph is mock_graph
+    mock_apply.assert_called_once_with(mock_graph, curated_path=curated)
+
+
+def test_initialize_arango_graph_merge_failure_keeps_live_schema(tmp_path):
+    """Merge errors are logged; live graph is still returned as healthy."""
+    curated = tmp_path / 'curated.json'
+    curated.write_text('{}')
+    client_patch, graph_patch, mock_graph = _patch_arango_connect()
+    with client_patch, graph_patch, \
+            patch('app.CURATED_EDGE_SCHEMA_PATH', curated), \
+            patch(
+                'app.apply_curated_edge_schema',
+                side_effect=ValueError('bad curated'),
+            ), \
+            patch.object(app.logger, 'error') as mock_error:
+        graph, healthy, error = initialize_arango_graph()
+
+    assert healthy is True
+    assert error is None
+    assert graph is mock_graph
+    mock_error.assert_called_once()
+    assert isinstance(mock_error.call_args[0][2], ValueError)
+    assert 'bad curated' in str(mock_error.call_args[0][2])
+
+
+def test_initialize_arango_graph_missing_curated_schema(tmp_path):
+    """Missing curated file warns and returns the live graph."""
+    missing = tmp_path / 'does-not-exist.json'
+    client_patch, graph_patch, mock_graph = _patch_arango_connect()
+    with client_patch, graph_patch, \
+            patch('app.CURATED_EDGE_SCHEMA_PATH', missing), \
+            patch('app.apply_curated_edge_schema') as mock_apply, \
+            patch.object(app.logger, 'warning') as mock_warning:
+        graph, healthy, error = initialize_arango_graph()
+
+    assert healthy is True
+    assert error is None
+    assert graph is mock_graph
+    mock_apply.assert_not_called()
+    mock_warning.assert_called_once()
+
+
+def test_initialize_arango_graph_connection_failure():
+    """Arango connection failures return unhealthy with the error string."""
+    with patch('app.ArangoClient') as mock_client_cls:
+        mock_client_cls.return_value.db.side_effect = Exception('auth failed')
+        graph, healthy, error = initialize_arango_graph()
+
+    assert graph is None
+    assert healthy is False
+    assert error == 'auth failed'
+
+
 @patch('app.select_collections')
 @patch('app.get_updated_graph')
 @patch('app.ArangoGraphQAChain')

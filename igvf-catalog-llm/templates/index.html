@@ -32,6 +32,10 @@
     <section class="panel">
       <h2>2. AQL</h2>
       <textarea id="aql" rows="10" placeholder="Generated AQL appears here. You can edit it before running."></textarea>
+      <p id="aql-sort-warning" class="warning" role="status" hidden>
+        This query sorts results. On large catalogs that can be slow or time out.
+        Prefer filter + LIMIT, then sort a smaller set if needed. You can still run it.
+      </p>
       <div class="row controls">
         <label>
           Limit

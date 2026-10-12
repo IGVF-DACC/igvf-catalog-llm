@@ -4,3 +4,11 @@
 .pytest_cache
 __pycache__/
 *.pyc
+
+# Local / generated (do not commit)
+.coverage
+coverage.xml
+**/venv/
+.vscode/
+post_example.txt
+cdk/out.yaml

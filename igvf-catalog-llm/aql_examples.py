@@ -17,23 +17,20 @@ AQL_EXAMPLES_TEMPLATE = """
     # Can you tell me the variant with SPDI of NC_000012.12:102855312:C:T is associated with what diseases?
     WITH variants, variants_diseases, ontology_terms
     FOR variant IN variants
-    FILTER variant.spdi == 'NC_000012.12:102855312:C:T'
-    FOR disease IN OUTBOUND variant variants_diseases
-    LIMIT {offset}, {limit}
-    RETURN disease
+        FILTER variant.spdi == 'NC_000012.12:102855312:C:T'
+        FOR d IN variants_diseases
+            FILTER d._from == variant._id
+            LIMIT {offset}, {limit}
+            RETURN DOCUMENT(d._to)
 
     # Show me all variants associated with cardiomyopathy
-    FOR v in variants
-    FILTER v._id IN (
-        FOR d IN variants_diseases
-        FILTER d._to IN (
-        FOR o in ontology_terms
+    WITH variants, variants_diseases, ontology_terms
+    FOR o IN ontology_terms
         FILTER o.name == 'cardiomyopathy'
-        RETURN o._id
-        )
-    RETURN d._from)
-    LIMIT {offset}, {limit}
-    RETURN v
+        FOR d IN variants_diseases
+            FILTER d._to == o._id
+            LIMIT {offset}, {limit}
+            RETURN DOCUMENT(d._from)
 
     # What are the transcripts from the protein PARI_HUMAN?
     FOR p IN proteins
@@ -43,13 +40,15 @@ AQL_EXAMPLES_TEMPLATE = """
             LIMIT {offset}, {limit}
             RETURN DOCUMENT(t._from)
 
+
+
     # what genomic elements overlap rs1047055?
     LET variant = FIRST(
     FOR v IN variants
         FILTER "rs1047055" in v.rsid
         RETURN { chr: v.chr, pos: v.pos}
     )
-    FOR g IN genomic_elements OPTIONS { indexHint: "idx_zkd_start_end", forceIndexHint: true }
+    FOR g IN genomic_elements OPTIONS { indexHint: "idx_mdi_prefix_chr_start_end", forceIndexHint: true }
         FILTER g.chr == variant.chr AND g.start <= variant.pos AND g.end > variant.pos
         LIMIT {offset}, {limit}
         RETURN DISTINCT g
@@ -63,7 +62,7 @@ AQL_EXAMPLES_TEMPLATE = """
             RETURN DISTINCT v._id
     )
     FOR vg IN variants_genes
-        FILTER vg.label == "eQTL" AND vg.biosample_term IN heartTerms
+        FILTER vg.biosample_term IN heartTerms AND vg.label == "eQTL"
         LIMIT {offset}, {limit}
         RETURN DISTINCT {
             term: DOCUMENT(vg.biosample_term),
@@ -75,20 +74,17 @@ AQL_EXAMPLES_TEMPLATE = """
     WITH genomic_elements, genomic_elements_genes
     FOR gene IN genomic_elements_genes
         FILTER gene._to == "genes/ENSG00000187642" AND gene.score > 0.85
-        FOR element IN genomic_elements
-            FILTER element._id == gene._from
-            LIMIT {offset}, {limit}
-            RETURN element
+        LIMIT {offset}, {limit}
+        RETURN DOCUMENT(gene._from)
 
-    # Find the top eQTLs in ontology term named amygdala, sorted by p_value.
+    # Find eQTLs in ontology term named amygdala.
     LET amygdalaTerms = (
     FOR t IN ontology_terms
         FILTER t.name == "amygdala"
         RETURN t._id
     )
     FOR vg IN variants_genes
-        FILTER vg.biosample_term IN amygdalaTerms AND vg.label == "eQTL"
-        SORT vg.`p_value` ASC
+        FILTER vg.biosample_term IN amygdalaTerms AND vg.method == "eQTL"
         LIMIT {offset}, {limit}
         LET gene = DOCUMENT(vg._to)
         LET variant = DOCUMENT(vg._from)
@@ -103,7 +99,7 @@ AQL_EXAMPLES_TEMPLATE = """
             FILTER "rs309428" in v.rsid
             RETURN v
     )
-    FOR g IN genomic_elements OPTIONS { indexHint: "idx_zkd_start_end", forceIndexHint: true }
+    FOR g IN genomic_elements OPTIONS { indexHint: "idx_mdi_prefix_chr_start_end", forceIndexHint: true }
         FILTER g.chr == variant.chr AND g.start <= variant.pos AND g.end > variant.pos
         LIMIT {offset}, {limit}
         RETURN g
@@ -115,18 +111,16 @@ AQL_EXAMPLES_TEMPLATE = """
         LIMIT {offset}, {limit}
         RETURN gg
 
-    # Find genes that are linked to variant with SPDI NC_000005.10:173860847:G:A.
+    # Find genes that are linked to variant with SPDI NC_000017.11:76710350:G:A.
     LET variant = FIRST(
         FOR v IN variants
-            FILTER v.spdi == 'NC_000005.10:173860847:G:A'
+            FILTER v.spdi == 'NC_000017.11:76710350:G:A'
             RETURN v
     )
     FOR vg IN variants_genes
         FILTER vg._from == variant._id
-        FOR gene IN genes
-            FILTER gene._id == vg._to
-            LIMIT {offset}, {limit}
-            RETURN distinct gene
+        LIMIT {offset}, {limit}
+        RETURN DISTINCT DOCUMENT(vg._to)
 
     # Is variant with rsID rs875741 a caQTL?
     FOR v in variants
@@ -140,19 +134,15 @@ AQL_EXAMPLES_TEMPLATE = """
     FOR vg IN variants_genes
         FILTER vg._to == 'genes/ENSG00000188290'
         LIMIT {offset}, {limit}
-        FOR v IN variants
-            FILTER v._id == vg._from
-            RETURN v
+        RETURN DOCUMENT(vg._from)
 
     # What diseases are associated with gene PAH?
     FOR gene IN genes
-    FILTER gene.name == "PAH"
-    FOR edge IN diseases_genes
-        FILTER edge._to == gene._id
-        FOR disease IN ontology_terms
-        FILTER disease._id == edge._from
-        LIMIT {offset}, {limit}
-        RETURN disease
+        FILTER gene.name == "PAH"
+        FOR edge IN diseases_genes
+            FILTER edge._to == gene._id
+            LIMIT {offset}, {limit}
+            RETURN DOCUMENT(edge._from)
     """
 
 
