@@ -1,0 +1,58 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "edges/variants_proteins.ASB.json",
+    "db_collection_name": "variants_proteins",
+    "allOf": [
+        {
+            "$ref": "edges.base.json"
+        },
+        {
+            "type": "object",
+            "properties": {
+                "_from": {
+                    "example": "variants/NC_000015.10:75202391:C:G",
+                    "pattern": "^variants/"
+                },
+                "_to": {
+                    "example": "proteins/ENSP00000281043",
+                    "pattern": "^proteins/"
+                },
+                "motif_fc": {
+                    "type": [
+                        "number",
+                        "null"
+                    ],
+                    "description": "Log2 ratio of HOCOMOCO motif p-values.",
+                    "example": -0.27
+                },
+                "source": {
+                    "enum": [
+                        "ADASTRA"
+                    ]
+                },
+                "label": {
+                    "enum": [
+                        "allele-specific binding"
+                    ]
+                },
+                "method": {
+                    "enum": [
+                        "ADASTRA"
+                    ]
+                },
+                "class": {
+                    "enum": [
+                        "observed data"
+                    ]
+                }
+            },
+            "required": [
+                "_from",
+                "_to",
+                "method",
+                "label",
+                "source"
+            ]
+        }
+    ]
+}

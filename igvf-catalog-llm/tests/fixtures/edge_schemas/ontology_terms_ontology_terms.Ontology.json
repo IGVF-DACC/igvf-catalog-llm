@@ -1,0 +1,26 @@
+{
+    "$id": "edges/ontology_terms_ontology_terms.Ontology.json",
+    "db_collection_name": "ontology_terms_ontology_terms",
+    "allOf": [
+        {
+            "type": "object",
+            "properties": {
+                "source": {
+                    "enum": [
+                        "Ontology"
+                    ]
+                },
+                "method": {
+                    "enum": [
+                        "ontology"
+                    ]
+                },
+                "label": {
+                    "enum": [
+                        "subclass of"
+                    ]
+                }
+            }
+        }
+    ]
+}

@@ -51,6 +51,9 @@ config: Dict[str, Any] = {
                 'max_capacity': 4,
             },
             'backend_url': 'https://db-dev.catalog.igvf.org/',
+            'curated_edge_schema_path': (
+                '/igvf-catalog-llm/curated_edge_schema.dev.json'
+            ),
             'tags': [
                 ('time-to-live-hours', '72'),
                 ('turn-off-on-friday-night', 'yes'),
@@ -64,6 +67,9 @@ config: Dict[str, Any] = {
                 'max_capacity': 4,
             },
             'backend_url': 'https://db-dev.catalog.igvf.org/',
+            'curated_edge_schema_path': (
+                '/igvf-catalog-llm/curated_edge_schema.dev.json'
+            ),
             'tags': [
             ],
         },
@@ -75,6 +81,9 @@ config: Dict[str, Any] = {
                 'max_capacity': 4,
             },
             'backend_url': 'https://db.catalog.igvf.org/',
+            'curated_edge_schema_path': (
+                '/igvf-catalog-llm/curated_edge_schema.prod.json'
+            ),
             'tags': [
             ],
             'url_prefix': 'llm',
@@ -88,7 +97,7 @@ class Common:
     organization_name: str = 'igvf-dacc'
     project_name: str = 'igvf-catalog-llm'
     default_region: str = 'us-west-2'
-    aws_cdk_version: str = '2.1022.0'
+    aws_cdk_version: str = '2.1031.2'
 
 
 @dataclass
@@ -96,6 +105,7 @@ class Config:
     name: str
     branch: str
     backend_url: str
+    curated_edge_schema_path: str
     frontend: Dict[str, Any]
     tags: List[Tuple[str, str]]
     url_prefix: Optional[str] = None

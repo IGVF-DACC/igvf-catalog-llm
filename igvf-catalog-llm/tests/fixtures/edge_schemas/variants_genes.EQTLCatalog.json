@@ -1,0 +1,38 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "edges/variants_genes.EQTLCatalog.json",
+    "db_collection_name": "variants_genes",
+    "allOf": [
+        {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "enum": [
+                        "eQTL",
+                        "spliceQTL"
+                    ]
+                },
+                "method": {
+                    "enum": [
+                        "eQTL",
+                        "spliceQTL"
+                    ]
+                },
+                "source": {
+                    "enum": [
+                        "EBI"
+                    ]
+                },
+                "p_value": {
+                    "type": "number",
+                    "description": "Nominal p-value."
+                }
+            },
+            "required": [
+                "label",
+                "method",
+                "p_value"
+            ]
+        }
+    ]
+}

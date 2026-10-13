@@ -55,6 +55,22 @@ docker-compose up --build
 
 The app will be available at [http://localhost:5000](http://localhost:5000)
 
+### Curated edge schema
+
+The app merges a committed curated edge schema into the live Arango schema at startup. Two files are kept in the repo and selected like `BACKEND_URL` via `CURATED_EDGE_SCHEMA_PATH` (CDK sets this per environment; local defaults to the `.dev` file):
+
+| File | Source | Used by |
+|------|--------|---------|
+| `curated_edge_schema.dev.json` | [igvf-catalog `dev`](https://github.com/IGVF-DACC/igvf-catalog/tree/dev/data/schemas/edges) | demo, dev, local |
+| `curated_edge_schema.prod.json` | igvf-catalog `main` | production |
+
+```sh
+python scripts/generate_curated_edge_schema.py --from-github --ref dev \
+  --output curated_edge_schema.dev.json
+python scripts/generate_curated_edge_schema.py --from-github --ref main \
+  --output curated_edge_schema.prod.json
+```
+
 ## API Endpoints
 
 ### Health Check
@@ -76,7 +92,20 @@ Content-Type: application/json
 }
 ```
 
-Returns a JSON response with the AQL query, results, and metadata.
+Generates AQL, runs it against ArangoDB, and asks the LLM to explain the rows.
+
+### Graph Query Generator Endpoint
+
+```bash
+POST /graph-query-generator
+Content-Type: application/json
+{
+  "password": "<CATALOG_PASSWORD>",
+  "query": "Tell me about gene SAMD11"
+}
+```
+
+Returns a JSON response with the generated AQL query. This endpoint does not execute the query or return an LLM explanation.
 
 ## Infrastructure (AWS CDK)
 

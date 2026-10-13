@@ -2,7 +2,7 @@
 
 ## Infrastructure
 
-Install Node.js 20 using `nvm` (Node Version Manager):
+Install Node.js 24 using `nvm` (Node Version Manager):
 
 ```bash
 # Install nvm.
@@ -12,17 +12,17 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh |
 Then in new terminal:
 
 ```bash
-# Install and use node 20.
-nvm install 20
-nvm use 20
+# Install and use node 24.
+nvm install 24
+nvm use 24
 # Check version.
 node --version
 ```
 
-Install CDK toolkit (requires Node.js 18.x):
+Install CDK toolkit:
 
 ```bash
-npm install -g aws-cdk@2.1022.0
+npm install -g aws-cdk@2.1031.2
 ```
 
 Create virtual Python 3.11 environment and install requirements:
@@ -32,6 +32,14 @@ pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 Make sure Docker is running.
+
+## Deployed environments
+
+| Environment | URL |
+| --- | --- |
+| Demo | `https://catalog-llm-<branch>.demo.igvf.org` |
+| Dev | <https://catalog-llm-dev.demo.igvf.org> |
+| Production | <https://llm.catalogkg.igvf.org> |
 
 ## Deploy demo stacks
 
@@ -104,10 +112,6 @@ Eventually you should see a list of proposed security policy changes.
 
 ![iam changes](images/iam_changes.png)
 
-Confirm that you want to make these changes.
-
-![deploy changes](images/deploy_changes.png)
-
 ### Monitoring deployment and resources
 
 You should see a notification in the `aws-chatbot` Slack channel that your pipeline has `STARTED`.
@@ -118,7 +122,7 @@ You can click on that link or find your pipeline in the `AWS CodePipeline` conso
 
 ![pipelines](images/pipelines.png)
 
-It takes about twenty minutes for the pipeline to run tests, build Docker image assets, and spin up the infrastructure. Here you can see the first two steps in the pipeline: listening to your Github branch and synthesizing a CloudFormation template.
+It takes about ten minutes for the pipeline to run tests, build Docker image assets, and spin up the infrastructure. Here you can see the steps in the pipeline: listening to your Github branch and synthesizing a CloudFormation template.
 
 ![pipeline steps](images/pipeline_steps.png)
 
@@ -126,7 +130,7 @@ After the pipeline completes you should see a success notification in Slack:
 
 ![slack success](images/pipeline_succeeded.png)
 
-And have three `AWS CloudFormation` stacks, one for the pipeline, one for Postgres, and one for the backend.
+And have two `AWS CloudFormation` stacks, one for the pipeline, and one for the frontend.
 
 ![demo stacks](images/demo_stacks.png)
 
@@ -138,11 +142,11 @@ You can see all of the actual resources (RDS instance, Fargate cluster, IAM role
 
 ![stack resources](images/stack_resources.png)
 
-The deployed resources should have metadata tags. For example the RDS instance shows its associated branch and source snapshot.
+The deployed resources should have metadata tags. For example the ECS instance shows its associated branch, environment and project.
 
-![rds tags](images/rds_tags.png)
+![rds tags](images/ecs_tags.png)
 
-Browse using the demo URL (e.g. `https://igvfd-igvf-1234-my-feature-branch.demo.igvf.org`):
+Browse using the demo URL (e.g. `https://catalog-llm-dserv-1234-my-feature-branch.demo.igvf.org`):
 
 ![home](images/home.png)
 
@@ -153,17 +157,6 @@ Browse using the demo URL (e.g. `https://igvfd-igvf-1234-my-feature-branch.demo.
 The easiest way to clean up demo stacks is to delete the Github branch associated with them (e.g. after the branch is merged). This will automatically clean up any stacks (frontend or backend) with a matching branch name.
 
 Note there is a lag between when a branch is deleted and when the cleaner runs and deletes demo stacks. If you try to redeploy a demo with the same branch name before the cleaner is done processing a branch, the new stacks will also get deleted.
-
-### Manual clean up
-
-To manually clean up demo stacks and the associated CodePipeline:
-
-```bash
-$ python commands/cdk_destroy_all_stacks.py -c branch=IGVF-1234-my-feature-branch --profile igvf-dev
-# Follow (y/n) prompts...
-```
-
-Pass the `--force` flag to bypass the confirmation prompts.
 
 ### Automatic time-based clean up
 
@@ -177,18 +170,6 @@ By default demo stacks have a lifetime of 72 hours, after which they get destroy
 ```
 
 In `turn-off-on-friday-night` tag, any value other than `yes` is interpreted as a negative (as well as the absence of the tag).
-
-## Notes on demos
-
-Avoid deploying a demo stack to our primary/shared branches (e.g. `dev` or `main`) as these already have their own pipelines associated with them. If you want to deploy your own demo that matches `dev`, for example, first checkout `dev`, pull all of the changes, and then copy them to your own branch with a special name:
-
-```bash
-git checkout dev
-git pull
-git checkout -b dev-keenan
-```
-
-Then use this new branch to deploy your pipeline.
 
 ## Useful commands
 

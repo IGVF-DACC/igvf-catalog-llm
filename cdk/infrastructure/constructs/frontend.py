@@ -143,6 +143,9 @@ class Frontend(Construct):
             environment={
                 'NODE_ENV': 'production',
                 'BACKEND_URL': self.props.config.backend_url,
+                'CURATED_EDGE_SCHEMA_PATH': (
+                    self.props.config.curated_edge_schema_path
+                ),
             },
             secrets={
                 'CATALOG_USERNAME': Secret.from_secrets_manager(catalog_llm_secret, 'CATALOG_USERNAME'),
@@ -170,6 +173,10 @@ class Frontend(Construct):
         Tags.of(self.fargate_service).add(
             'backend_url',
             self.props.config.backend_url
+        )
+        Tags.of(self.fargate_service).add(
+            'curated_edge_schema_path',
+            self.props.config.curated_edge_schema_path
         )
 
     def _enable_exec_command(self) -> None:
